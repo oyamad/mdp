@@ -17,11 +17,13 @@ Error Bounds and Termination Conditions
 
 References
 ----------
+M. L. Puterman, Markov Decision Processes: Discrete Stochastic Dynamic
+Programming, Wiley-Interscience, 2005.
 
 """
 from __future__ import division
 import numpy as np
-#from quantecon import MarkovChain
+from quantecon import MarkovChain
 
 
 class MDP(object):
@@ -78,6 +80,28 @@ class MDP(object):
         self.tol = 1e-8
 
     def bellman_operator(self, w, compute_policy=False):
+        """
+        The Bellman operator, which computes and returns the updated
+        value function Tw for a value function w.
+
+        Parameters
+        ----------
+        w : array_like(float, ndim=1)
+            Value function vector, of length n.
+
+        compute_policy : bool, optional(default=False)
+            Whether or not to additionally return the w-greedy policy.
+
+        Returns
+        -------
+        Tw : array_like(float, ndim=1)
+            Updated value function vector, of length n.
+
+        sigma : array_like(int, ndim=1)
+            w-greedy policy vector, of length n. Only returned if
+            `compute_policy=True`.
+
+        """
         vals = self.R + self.beta * self.Q.dot(w)  # n x m
 
         if compute_policy:
@@ -89,16 +113,58 @@ class MDP(object):
             return Tw
 
     def T_sigma(self, sigma):
+        """
+        Return the T_sigma operator.
+
+        Parameters
+        ----------
+        sigma : array_like(int, ndim=1)
+            Policy vector, of length n.
+
+        Returns
+        -------
+        callable
+            The T_sigma operator.
+
+        """
         # Faster than vals[np.arange(self.num_states), sigma]
         R_sigma = self.R[np.arange(self.num_states), sigma]
         Q_sigma = self.Q[np.arange(self.num_states), sigma]
         return lambda w: R_sigma + self.beta * Q_sigma.dot(w)
 
     def compute_greedy(self, w):
+        """
+        Compute the w-greedy policy.
+
+        Parameters
+        ----------
+        w : array_like(float, ndim=1)
+            Value function vector, of length n.
+
+        Returns
+        -------
+        sigma : array_like(int, ndim=1)
+            w-greedy policy vector, of length n.
+
+        """
         _, sigma = self.bellman_operator(w, compute_policy=True)
         return sigma
 
     def evaluate_policy(self, sigma):
+        """
+        Compute the value of a policy.
+
+        Parameters
+        ----------
+        sigma : array_like(int, ndim=1)
+            Policy vector, of length n.
+
+        Returns
+        -------
+        v_sigma : array_like(float, ndim=1)
+            Value vector of `sigma`, of length n.
+
+        """
         # Solve (I - beta * Q_sigma) v = R_sigma for v
         R_sigma = self.R[np.arange(self.num_states), sigma]
         Q_sigma = self.Q[np.arange(self.num_states), sigma]
@@ -226,8 +292,7 @@ class MDP(object):
 
         """
         P = self.Q[np.arange(self.num_states), sigma]
-        return P
-        #return MarkovChain(P)
+        return MarkovChain(P)
 
 
 def random_mdp(num_states, num_actions, beta=None, constraints=None):
@@ -243,7 +308,7 @@ def random_mdp(num_states, num_actions, beta=None, constraints=None):
         Number of actions.
 
     beta : scalar(float), optional
-        Discount factor. Randomly chosen from [0, 1) if not specified.
+        Discount factor. Randomly chosen from (0, 1) if not specified.
 
     constraints : array_like(bool, ndim=2), optional
         Array of shape (num_states, num_actions) representing the
