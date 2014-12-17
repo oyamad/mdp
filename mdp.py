@@ -6,14 +6,27 @@ Author: Daisuke Oyama
 Base class for solving Markov decision processes (MDP) with discrete
 states and actions.
 
+Markov Decision Processes
+-------------------------
+
+Solution Algorithms
+-------------------
+
+Error Bounds and Termination Conditions
+---------------------------------------
+
+References
+----------
+
 """
+from __future__ import division
 import numpy as np
-from quantecon import MarkovChain
+#from quantecon import MarkovChain
 
 
 class MDP(object):
     """
-    Class for dealing with Markov decision processes (MDP) with n states
+    Class for dealing with a Markov decision process (MDP) with n states
     and m actions.
 
     Parameters
@@ -30,7 +43,7 @@ class MDP(object):
         chosen is a.
 
     beta : scalar(float), optional(default=0.95)
-        Discount factor. Must be in [0, 1).
+        Discount factor. Must be in (0, 1).
 
     Attributes
     ----------
@@ -56,27 +69,64 @@ class MDP(object):
                 'R and Q must be of shape n x m and n x m x n, respectively'
             )
 
-        if not (0 <= beta < 1):
-            raise ValueError('beta must be in [0, 1)')
+        if not (0 < beta < 1):
+            raise ValueError('beta must be in (0, 1)')
         self.beta = beta
 
-        self.tol = 1e-3
+        self.epsilon = 1e-3
         self.max_iter = 100
+        self.tol = 1e-8
 
-    def solve(self, method='value_iteration',
-              w_0=None, tol=None, max_iter=None, return_num_iter=False):
+    def bellman_operator(self, w, compute_policy=False):
+        vals = self.R + self.beta * self.Q.dot(w)  # n x m
+
+        if compute_policy:
+            sigma = vals.argmax(axis=1)
+            Tw = vals[np.arange(self.num_states), sigma]
+            return Tw, sigma
+        else:
+            Tw = vals.max(axis=1)
+            return Tw
+
+    def T_sigma(self, sigma):
+        # Faster than vals[np.arange(self.num_states), sigma]
+        R_sigma = self.R[np.arange(self.num_states), sigma]
+        Q_sigma = self.Q[np.arange(self.num_states), sigma]
+        return lambda w: R_sigma + self.beta * Q_sigma.dot(w)
+
+    def compute_greedy(self, w):
+        _, sigma = self.bellman_operator(w, compute_policy=True)
+        return sigma
+
+    def evaluate_policy(self, sigma):
+        # Solve (I - beta * Q_sigma) v = R_sigma for v
+        R_sigma = self.R[np.arange(self.num_states), sigma]
+        Q_sigma = self.Q[np.arange(self.num_states), sigma]
+        A = np.identity(self.num_states) - self.beta * Q_sigma
+        b = R_sigma
+        v_sigma = np.linalg.solve(A, b)
+        return v_sigma
+
+    def solve(self, method='policy_iteration',
+              w_0=None, epsilon=None, max_iter=None, return_num_iter=False,
+              k=20):
         """
         Solve the dynamic programming problem.
 
         """
-        if method == 'value_iteration':
-            v_star, num_iter = \
-                self.value_iteration(w_0=w_0, tol=tol, max_iter=max_iter)
-            sigma_star = self.compute_greedy(v_star)
-        elif method == 'policy_iteration':
-            raise NotImplementedError
-        elif method == 'policy_iteration_modified':
-            raise NotImplementedError
+        if method in ['value_iteration', 'vi']:
+            v_star, sigma_star, num_iter = \
+                self.value_iteration(
+                    w_0=w_0, epsilon=epsilon, max_iter=max_iter
+                )
+        elif method in ['policy_iteration', 'pi']:
+            v_star, sigma_star, num_iter = \
+                self.policy_iteration(w_0=w_0, max_iter=max_iter)
+        elif method in ['modified_policy_iteration', 'mpi']:
+            v_star, sigma_star, num_iter = \
+                self.modified_policy_iteration(
+                    w_0=w_0, epsilon=epsilon, max_iter=max_iter, k=k
+                )
         else:
             raise ValueError
 
@@ -87,18 +137,12 @@ class MDP(object):
         else:
             return v_star, sigma_star, mc
 
-    def value_iteration(self, w_0=None, tol=None, max_iter=None):
-        if w_0 is None:
-            w_0 = self.R.max(axis=1)
-        if tol is None:
-            tol = self.tol
-        if max_iter is None:
-            max_iter = self.max_iter
-
+    def successive_approx(self, T, w_0, tol, max_iter):
+        # May be replaced with quantecon.compute_fixed_point
         w = w_0
         for i in range(max_iter):
-            new_w = self.bellman_operator(w)
-            if np.abs(new_w - w).max() <= tol:
+            new_w = T(w)
+            if np.abs(new_w - w).max() < tol:
                 w = new_w
                 break
             w = new_w
@@ -107,32 +151,74 @@ class MDP(object):
 
         return w, num_iter
 
-    def policy_iteration(self, sigma_0=None, max_iter=None):
-        pass
+    def value_iteration(self, w_0=None, epsilon=None, max_iter=None):
+        if w_0 is None:
+            w_0 = self.R.max(axis=1)
+        if max_iter is None:
+            max_iter = self.max_iter
+        if epsilon is None:
+            epsilon = self.epsilon
 
-    def policy_iteration_modified(self, sigma_0=None, tol=None, max_iter=None):
-        pass
+        tol = epsilon * (1-self.beta) / (2*self.beta)
+        v, num_iter = \
+            self.successive_approx(T=self.bellman_operator,
+                                   w_0=w_0, tol=tol, max_iter=max_iter)
+        sigma = self.compute_greedy(v)
 
-    def bellman_operator(self, w, return_policy=False):
-        vals = self.R + self.beta * self.Q.dot(w)  # n x m
+        return v, sigma, num_iter
 
-        if return_policy:
-            sigma = vals.argmax(axis=1)
-            return sigma
-        else:
-            Tw = vals.max(axis=1)
-            return Tw
+    def policy_iteration(self, w_0=None, max_iter=None):
+        # What for initial condition?
+        if w_0 is None:
+            w_0 = self.R.max(axis=1)
+        if max_iter is None:
+            max_iter = self.max_iter
 
-    def compute_greedy(self, w):
-        sigma = self.bellman_operator(w, return_policy=True)
-        return sigma
+        sigma = self.compute_greedy(w_0)
+        for i in range(max_iter):
+            # Policy evaluation
+            v_sigma = self.evaluate_policy(sigma)
+            # Policy improvement
+            new_sigma = self.compute_greedy(v_sigma)
+            if np.array_equal(new_sigma, sigma):
+                break
+            sigma = new_sigma
 
-    def evaluate_policy(self, sigma):
-        pass
+        num_iter = i + 1
 
-    def evaluate_policy_iterative(self, sigma,
-                                  w_0=None, tol=None, max_iter=None):
-        pass
+        return v_sigma, sigma, num_iter
+
+    def modified_policy_iteration(self, w_0=None, epsilon=None, max_iter=None,
+                                  k=20):
+        if w_0 is None:
+            w_0 = self.R.max(axis=1)
+        if max_iter is None:
+            max_iter = self.max_iter
+        if epsilon is None:
+            epsilon = self.epsilon
+
+        def span(z):
+            return z.max() - z.min()
+
+        def midrange(z):
+            return (z.min() + z.max()) / 2
+
+        v = w_0
+        for i in range(max_iter):
+            # Policy improvement
+            u, sigma = self.bellman_operator(v, compute_policy=True)
+            diff = u - v
+            if span(diff) < epsilon * (1-self.beta) / self.beta:
+                v = u + midrange(diff) * self.beta / (1 - self.beta)
+                break
+            # Partial policy evaluation with k iterations
+            v, _ = \
+                self.successive_approx(T=self.T_sigma(sigma), w_0=u,
+                                       tol=self.tol, max_iter=k-1)
+
+        num_iter = i + 1
+
+        return v, sigma, num_iter
 
     def controlled_mc(self, sigma):
         """
@@ -140,7 +226,8 @@ class MDP(object):
 
         """
         P = self.Q[np.arange(self.num_states), sigma]
-        return MarkovChain(P)
+        return P
+        #return MarkovChain(P)
 
 
 def random_mdp(num_states, num_actions, beta=None, constraints=None):
@@ -171,7 +258,7 @@ def random_mdp(num_states, num_actions, beta=None, constraints=None):
     """
     R = np.random.randint(100, size=(num_states, num_actions)).astype(float)
     if constraints is not None:
-        R[np.where(np.asarray(constraints) == False)] = -np.inf
+        R[np.where(np.asarray(constraints) is False)] = -np.inf
 
     P = np.random.rand(num_states, num_actions, num_states)
     P /= np.sum(P, axis=2, keepdims=True)
