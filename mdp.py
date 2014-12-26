@@ -24,6 +24,7 @@ Programming, Wiley-Interscience, 2005.
 from __future__ import division
 import numpy as np
 from quantecon import MarkovChain
+from random_stochmatrix import gen_random_stochmatrix
 
 
 class MDP(object):
@@ -295,9 +296,11 @@ class MDP(object):
         return MarkovChain(P)
 
 
-def random_mdp(num_states, num_actions, beta=None, constraints=None):
+def random_mdp(num_states, num_actions, beta=None, constraints=None,
+               k=None, scale=1, sparse=False):
     """
-    Generate an MDP randomly.
+    Generate an MDP randomly. The reward values are drawn from the
+    normal distribution with mean 0 and standard deviation `scale`.
 
     Parameters
     ----------
@@ -315,21 +318,38 @@ def random_mdp(num_states, num_actions, beta=None, constraints=None):
         constraints. If constraints[s, a] = False, then the flow reward
         of action a for state s will be set to `-inf`.
 
+    k : scalar(int), optional
+        Number of possible next states for each state-action pair. Equal
+        to `num_states` if not specified.
+
+    scale : scalar(float), optional(default=1)
+        Standard deviation of the normal distribution for the reward
+        values.
+
+    sparse : bool, optional(default=False)
+        (Sparse matrices are not supported yet.)
+
     Returns
     -------
     mdp : MDP
         An instance of MDP.
 
     """
-    R = np.random.randint(100, size=(num_states, num_actions)).astype(float)
+    R = scale * np.random.randn(num_states, num_actions)
     if constraints is not None:
         R[np.where(np.asarray(constraints) is False)] = -np.inf
 
-    P = np.random.rand(num_states, num_actions, num_states)
-    P /= np.sum(P, axis=2, keepdims=True)
+    if sparse:
+        raise NotImplementedError
+
+    Q = np.empty((num_states, num_actions, num_states))
+    Ps = gen_random_stochmatrix(num_states, k=k, num_matrices=num_actions,
+                                sparse=sparse)
+    for a, P in enumerate(Ps):
+        Q[:, a, :] = P
 
     if beta is None:
         beta = np.random.rand(1)[0]
 
-    mdp = MDP(R, P, beta)
+    mdp = MDP(R, Q, beta)
     return mdp
