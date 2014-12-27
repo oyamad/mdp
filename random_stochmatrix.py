@@ -75,6 +75,32 @@ def gen_random_stochmatrix(n, k=None, num_matrices=1,
                 P[rows, cols] = data
                 yield P
 
+
+def _random_probvec(k, m):
+    """
+    Create probability vectors.
+
+    Parameters
+    ----------
+    k : scalar(int)
+        Dimension of each probability vectors.
+
+    m : scalar(int)
+        Number of probability vectors.
+
+    Returns
+    -------
+    ndarray(float, ndim=2)
+        Array of shape (m, k) containing probability vectors as rows.
+
+    """
+    x = np.empty((m, k+1))
+    r = np.random.rand(m, k-1)
+    r.sort(axis=-1)
+    x[:, 0], x[:, 1:k], x[:, k] = 0, r, 1
+    return np.diff(x, axis=-1)
+
+
 @jit
 def _random_indices(n, k, m):
     """
