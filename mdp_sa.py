@@ -1,5 +1,5 @@
 """
-Filename: mdp_sp.py
+Filename: mdp_sa.py
 
 Author: Daisuke Oyama
 
@@ -34,8 +34,8 @@ class MDP_sa(object):
     """
     Class for dealing with a Markov decision process (MDP) with n states
     and m actions. Work with state-action pairs. Sparse matrices
-    supported. For the moment, let L = n * m, and assume a lexicographic
-    order on state-action pairs.
+    supported. State-action pairs will be sorted in a lexicographic
+    order. Below let L denote the number of feasible state-action pairs.
 
     Parameters
     ----------
@@ -74,8 +74,10 @@ class MDP_sa(object):
     def __init__(self, R, Q, beta, s_indices, a_indices):
         if sp.issparse(Q):
             self.Q = Q.tocsr()
+            self._sparse = True
         else:
-            self.np.asarray(Q)
+            self.Q = np.asarray(Q)
+            self._sparse = False
 
         self.num_sa_pairs, self.num_states = self.Q.shape
 
@@ -87,7 +89,10 @@ class MDP_sa(object):
         self.a_indices = sa_ptrs.indices
         self.a_indptr = sa_ptrs.indptr
         self.num_actions = sa_ptrs.shape[1]
-        self.Q = sp.csr_matrix(self.Q[sa_ptrs.data])
+        if self._sparse:
+            self.Q = sp.csr_matrix(self.Q[sa_ptrs.data])
+        else:
+            self.Q = self.Q[sa_ptrs.data]
 
         _s_indices = np.empty(self.num_sa_pairs, dtype=int)
         for i in range(self.num_states):
@@ -104,6 +109,14 @@ class MDP_sa(object):
         self.epsilon = 1e-3
         self.max_iter = 100
         self.tol = 1e-8
+
+        # Linear equation solver to be used in evaluate_policy
+        if self._sparse:
+            self._solve = sp.linalg.spsolve
+            self._I = sp.identity(self.num_states)
+        else:
+            self._solve = np.linalg.solve
+            self._I = sp.identity(self.num_states)
 
     def RQ_sigma(self, sigma):
         sigma_indices = np.empty(self.num_states, dtype=int)
@@ -203,11 +216,15 @@ class MDP_sa(object):
         #R_sigma = self.R[np.arange(self.num_states), sigma]
         #Q_sigma = self.Q[np.arange(self.num_states), sigma]
         R_sigma, Q_sigma = self.RQ_sigma(sigma)
-        #A = np.identity(self.num_states) - self.beta * Q_sigma
-        A = sp.identity(self.num_states) - self.beta * Q_sigma
         b = R_sigma
+
+        #A = np.identity(self.num_states) - self.beta * Q_sigma
+        A = self._I - self.beta * Q_sigma
+
         #v_sigma = np.linalg.solve(A, b)
-        v_sigma = sp.linalg.spsolve(A, b)
+        #v_sigma = sp.linalg.spsolve(A, b)
+        v_sigma = self._solve(A, b)
+
         return v_sigma
 
     def solve(self, method='policy_iteration',
@@ -333,7 +350,9 @@ class MDP_sa(object):
         """
         #P = self.Q[np.arange(self.num_states), sigma]
         _, Q_sigma = self.RQ_sigma(sigma)
-        return MarkovChain(Q_sigma.toarray())
+        if self._sparse:
+            Q_sigma = Q_sigma.toarray()
+        return MarkovChain(Q_sigma)
 
 
 def random_mdp_sa(num_states, num_actions, beta=None, constraints=None,
