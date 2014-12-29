@@ -94,7 +94,7 @@ class MDP_sa(object):
         else:
             self.Q = self.Q[sa_ptrs.data]
 
-        _s_indices = np.empty(self.num_sa_pairs, dtype=int)
+        _s_indices = np.empty(self.num_sa_pairs, dtype=self.a_indices.dtype)
         for i in range(self.num_states):
             for j in range(self.a_indptr[i], self.a_indptr[i+1]):
                 _s_indices[j] = i
@@ -147,15 +147,18 @@ class MDP_sa(object):
             `compute_policy=True`.
 
         """
-        vals = self.R + self.beta * self.Q.dot(w)  # ndim=1, size=m*n
-        vals = vals.reshape(self.num_states, self.num_actions)  # n x m
+        vals = self.R + self.beta * self.Q.dot(w)  # ndim=1, size=L
 
+        Tw = np.empty(self.num_states)
         if compute_policy:
-            sigma = vals.argmax(axis=1)
-            Tw = vals[np.arange(self.num_states), sigma]
+            #sigma = vals.argmax(axis=1)
+            #Tw = vals[np.arange(self.num_states), sigma]
+            sigma = np.empty(self.num_states, dtype=int)
+            _s_wise_max_argmax(self.a_indices, self.a_indptr, vals, Tw, sigma)
             return Tw, sigma
         else:
-            Tw = vals.max(axis=1)
+            #Tw = vals.max(axis=1)
+            _s_wise_max(self.a_indices, self.a_indptr, vals, Tw)
             return Tw
 
     def T_sigma(self, sigma):
@@ -274,7 +277,8 @@ class MDP_sa(object):
     def value_iteration(self, w_0=None, epsilon=None, max_iter=None):
         if w_0 is None:
             #w_0 = self.R.max(axis=1)
-            w_0 = self.R.reshape((self.num_states, self.num_actions)).max(axis=1)
+            w_0 = np.empty(self.num_states)
+            _s_wise_max(self.a_indices, self.a_indptr, self.R, w_0)
         if max_iter is None:
             max_iter = self.max_iter
         if epsilon is None:
@@ -292,7 +296,8 @@ class MDP_sa(object):
         # What for initial condition?
         if w_0 is None:
             #w_0 = self.R.max(axis=1)
-            w_0 = self.R.reshape((self.num_states, self.num_actions)).max(axis=1)
+            w_0 = np.empty(self.num_states)
+            _s_wise_max(self.a_indices, self.a_indptr, self.R, w_0)
         if max_iter is None:
             max_iter = self.max_iter
 
@@ -314,7 +319,8 @@ class MDP_sa(object):
                                   k=20):
         if w_0 is None:
             #w_0 = self.R.max(axis=1)
-            w_0 = self.R.reshape((self.num_states, self.num_actions)).max(axis=1)
+            w_0 = np.empty(self.num_states)
+            _s_wise_max(self.a_indices, self.a_indptr, self.R, w_0)
         if max_iter is None:
             max_iter = self.max_iter
         if epsilon is None:
@@ -417,6 +423,34 @@ def random_mdp_sa(num_states, num_actions, beta=None, constraints=None,
 
     mdp_sa = MDP_sa(R, Q, beta, s_indices, a_indices)
     return mdp_sa
+
+
+@jit(nopython=True)
+def _s_wise_max_argmax(a_indices, a_indptr, vals, out_max, out_argmax):
+    n = len(out_max)
+    for i in range(n):
+        if a_indptr[i] != a_indptr[i+1]:
+            argmx = a_indices[a_indptr[i]]
+            mx = vals[a_indptr[i]]
+            for j in range(a_indptr[i]+1, a_indptr[i+1]):
+                if vals[j] > mx:
+                    argmx = a_indices[j]
+                    mx = vals[j]
+            out_max[i] = mx
+            out_argmax[i] = argmx
+
+
+@jit(nopython=True)
+def _s_wise_max(a_indices, a_indptr, vals, out_max):
+    n = len(out_max)
+    for i in range(n):
+        if a_indptr[i] != a_indptr[i+1]:
+            mx = vals[a_indptr[i]]
+            for j in range(a_indptr[i]+1, a_indptr[i+1]):
+                if vals[j] > mx:
+                    argmx = a_indices[j]
+                    mx = vals[j]
+            out_max[i] = mx
 
 
 @jit(nopython=True)
