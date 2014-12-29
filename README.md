@@ -8,4 +8,5 @@ Python code for Markov decision processes
 
 State-action pairs formulation
 
+* [Example 1](http://nbviewer.ipython.org/github/oyamad/mdp/blob/master/mdp_ex_kurtz_sa.ipynb)
 * [Perfomance comparison](http://nbviewer.ipython.org/github/oyamad/mdp/blob/master/mdp_sa01.ipynb)
