@@ -61,13 +61,14 @@ class MDP(object):
     """
     def __init__(self, R, Q, beta=0.95):
         self.R, self.Q = np.asarray(R), np.asarray(Q)
-        if R.ndim != 2:
+        if self.R.ndim != 2:
             raise ValueError('R must be 2-dimenstional')
-        self.num_states, self.num_actions = R.shape
+        self.num_states, self.num_actions = self.R.shape
 
-        if Q.ndim != 3:
+        if self.Q.ndim != 3:
             raise ValueError('Q must be 3-dimenstional')
-        if Q.shape != (self.num_states, self.num_actions, self.num_states):
+        if self.Q.shape != \
+           (self.num_states, self.num_actions, self.num_states):
             raise ValueError(
                 'R and Q must be of shape n x m and n x m x n, respectively'
             )
@@ -206,6 +207,9 @@ class MDP(object):
 
     def successive_approx(self, T, w_0, tol, max_iter):
         # May be replaced with quantecon.compute_fixed_point
+        if max_iter <= 0:
+            return w_0, 0
+
         w = w_0
         for i in range(max_iter):
             new_w = T(w)

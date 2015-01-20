@@ -100,6 +100,7 @@ class MDP_sa(object):
                 _s_indices[j] = i
         self.s_indices = _s_indices
 
+        R = np.asarray(R)
         self.R = R[sa_ptrs.data]
 
         if not (0 < beta < 1):
@@ -262,6 +263,9 @@ class MDP_sa(object):
 
     def successive_approx(self, T, w_0, tol, max_iter):
         # May be replaced with quantecon.compute_fixed_point
+        if max_iter <= 0:
+            return w_0, 0
+
         w = w_0
         for i in range(max_iter):
             new_w = T(w)
