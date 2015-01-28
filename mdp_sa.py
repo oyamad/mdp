@@ -117,7 +117,7 @@ class MDP_sa(object):
             self._I = sp.identity(self.num_states)
         else:
             self._solve = np.linalg.solve
-            self._I = sp.identity(self.num_states)
+            self._I = np.identity(self.num_states)
 
     def RQ_sigma(self, sigma):
         sigma_indices = np.empty(self.num_states, dtype=int)
