@@ -103,6 +103,17 @@ class MDP(object):
             if self.R.shape != (self.num_sa_pairs,):
                 raise ValueError(msg_shape)
 
+            if s_indices is None:
+                raise ValueError('s_indices must be supplied')
+            if a_indices is None:
+                raise ValueError('a_indices must be supplied')
+            if not (len(s_indices) == self.num_sa_pairs and
+                    len(a_indices) == self.num_sa_pairs):
+                raise ValueError(
+                    'length of s_indices and a_indices must be equal to ' +
+                    'the number of state-action pairs'
+                )
+
             # Sort indices and elements of Q
             sa_ptrs = sp.coo_matrix(
                 (np.arange(self.num_sa_pairs), (s_indices, a_indices))
