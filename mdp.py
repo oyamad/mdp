@@ -136,6 +136,26 @@ class MDP(object):
 
             self.R = self.R[sa_ptrs.data]
 
+            # Define state-wise maximization
+            def s_wise_max(vals, return_argmax=False):
+                """
+                Return the vector max_a vals(s, a), where vals is represented
+                by a 1-dimensional ndarray of shape  (self.num_sa_pairs,).
+
+                """
+                out_max = np.empty(self.num_states)
+                if return_argmax:
+                    out_argmax = np.empty(self.num_states, dtype=int)
+                    _s_wise_max_argmax(self.a_indices, self.a_indptr, vals,
+                                       out_max=out_max, out_argmax=out_argmax)
+                    return out_max, out_argmax
+                else:
+                    _s_wise_max(self.a_indices, self.a_indptr, vals,
+                                out_max=out_max)
+                    return out_max
+
+            self.s_wise_max = s_wise_max
+
         else:  # Not self._sa_pair
             if self.R.ndim != 2:
                 raise ValueError(msg_dimension)
@@ -148,6 +168,24 @@ class MDP(object):
             self.s_indices, self.a_indices = None, None
             self.num_sa_pairs = None
 
+            # Define state-wise maximization
+            def s_wise_max(vals, return_argmax=False):
+                """
+                Return the vector max_a vals(s, a), where vals is represented
+                by a 2-dimensional ndarray of shape (self.num_states,
+                self.num_actions).
+
+                """
+                if return_argmax:
+                    out_argmax = vals.argmax(axis=1)
+                    out_max = vals[np.arange(self.num_states), out_argmax]
+                    return out_max, out_argmax
+                else:
+                    out_max = vals.max(axis=1)
+                    return out_max
+
+            self.s_wise_max = s_wise_max
+
         if not (0 < beta < 1):
             raise ValueError('beta must be in (0, 1)')
         self.beta = beta
@@ -158,26 +196,13 @@ class MDP(object):
 
         # Linear equation solver to be used in evaluate_policy
         if self._sparse:
-            self._solve = sp.linalg.spsolve
+            self._lineq_solve = sp.linalg.spsolve
             self._I = sp.identity(self.num_states)
         else:
-            self._solve = np.linalg.solve
+            self._lineq_solve = np.linalg.solve
             self._I = np.identity(self.num_states)
 
-        self._R_max = None
-
-    @property
-    def R_max(self):
-        if self._R_max is None:
-            v = np.empty(self.num_states)
-            if self._sa_pair:
-                _s_wise_max(self.a_indices, self.a_indptr, self.R, out_max=v)
-            else:
-                self.R.max(axis=1, out=v)
-            self._R_max = v
-        return self._R_max
-
-    def _RQ_sigma(self, sigma):
+    def RQ_sigma(self, sigma):
         if self._sa_pair:
             sigma_indices = np.empty(self.num_states, dtype=int)
             _find_indices(self.a_indices, self.a_indptr, sigma,
@@ -214,21 +239,11 @@ class MDP(object):
         """
         vals = self.R + self.beta * self.Q.dot(w)  # Shape: (L,) or (n, m)
 
-        Tw = np.empty(self.num_states)
         if compute_policy:
-            sigma = np.empty(self.num_states, dtype=int)
-            if self._sa_pair:
-                _s_wise_max_argmax(self.a_indices, self.a_indptr, vals,
-                                   out_max=Tw, out_argmax=sigma)
-            else:
-                vals.argmax(axis=1, out=sigma)
-                Tw[:] = vals[np.arange(self.num_states), sigma]
+            Tw, sigma = self.s_wise_max(vals, return_argmax=True)
             return Tw, sigma
         else:
-            if self._sa_pair:
-                _s_wise_max(self.a_indices, self.a_indptr, vals, out_max=Tw)
-            else:
-                vals.max(axis=1, out=Tw)
+            Tw = self.s_wise_max(vals)
             return Tw
 
     def T_sigma(self, sigma):
@@ -246,7 +261,7 @@ class MDP(object):
             The T_sigma operator.
 
         """
-        R_sigma, Q_sigma = self._RQ_sigma(sigma)
+        R_sigma, Q_sigma = self.RQ_sigma(sigma)
         return lambda w: R_sigma + self.beta * Q_sigma.dot(w)
 
     def compute_greedy(self, w):
@@ -283,12 +298,12 @@ class MDP(object):
 
         """
         # Solve (I - beta * Q_sigma) v = R_sigma for v
-        R_sigma, Q_sigma = self._RQ_sigma(sigma)
+        R_sigma, Q_sigma = self.RQ_sigma(sigma)
         b = R_sigma
 
         A = self._I - self.beta * Q_sigma
 
-        v_sigma = self._solve(A, b)
+        v_sigma = self._lineq_solve(A, b)
 
         return v_sigma
 
@@ -341,7 +356,7 @@ class MDP(object):
 
     def value_iteration(self, w_0=None, epsilon=None, max_iter=None):
         if w_0 is None:
-            w_0 = self.R_max
+            w_0 = self.s_wise_max(self.R)
         if max_iter is None:
             max_iter = self.max_iter
         if epsilon is None:
@@ -358,7 +373,7 @@ class MDP(object):
     def policy_iteration(self, w_0=None, max_iter=None):
         # What for initial condition?
         if w_0 is None:
-            w_0 = self.R_max
+            w_0 = self.s_wise_max(self.R)
         if max_iter is None:
             max_iter = self.max_iter
 
@@ -379,7 +394,7 @@ class MDP(object):
     def modified_policy_iteration(self, w_0=None, epsilon=None, max_iter=None,
                                   k=20):
         if w_0 is None:
-            w_0 = self.R_max
+            w_0 = self.s_wise_max(self.R)
         if max_iter is None:
             max_iter = self.max_iter
         if epsilon is None:
@@ -413,7 +428,7 @@ class MDP(object):
         Returns the controlled Markov chain for a given policy `sigma`.
 
         """
-        _, Q_sigma = self._RQ_sigma(sigma)
+        _, Q_sigma = self.RQ_sigma(sigma)
         if self._sparse:
             Q_sigma = Q_sigma.toarray()
         return MarkovChain(Q_sigma)
