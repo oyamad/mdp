@@ -308,34 +308,23 @@ class MDP(object):
         return v_sigma
 
     def solve(self, method='policy_iteration',
-              w_0=None, epsilon=None, max_iter=None, return_num_iter=False,
-              k=20):
+              w_0=None, epsilon=None, max_iter=None, k=20):
         """
         Solve the dynamic programming problem.
 
         """
         if method in ['value_iteration', 'vi']:
-            v_star, sigma_star, num_iter = \
-                self.value_iteration(
-                    w_0=w_0, epsilon=epsilon, max_iter=max_iter
-                )
+            res = self.value_iteration(w_0=w_0, epsilon=epsilon,
+                                       max_iter=max_iter)
         elif method in ['policy_iteration', 'pi']:
-            v_star, sigma_star, num_iter = \
-                self.policy_iteration(w_0=w_0, max_iter=max_iter)
+            res = self.policy_iteration(w_0=w_0, max_iter=max_iter)
         elif method in ['modified_policy_iteration', 'mpi']:
-            v_star, sigma_star, num_iter = \
-                self.modified_policy_iteration(
-                    w_0=w_0, epsilon=epsilon, max_iter=max_iter, k=k
-                )
+            res = self.modified_policy_iteration(w_0=w_0, epsilon=epsilon,
+                                                 max_iter=max_iter, k=k)
         else:
             raise ValueError('invalid method')
 
-        mc = self.controlled_mc(sigma_star)
-
-        if return_num_iter:
-            return v_star, sigma_star, mc, num_iter
-        else:
-            return v_star, sigma_star, mc
+        return res
 
     def successive_approx(self, T, w_0, tol, max_iter):
         # May be replaced with quantecon.compute_fixed_point
@@ -368,7 +357,15 @@ class MDP(object):
                                    w_0=w_0, tol=tol, max_iter=max_iter)
         sigma = self.compute_greedy(v)
 
-        return v, sigma, num_iter
+        res = MDPSolveResult(v=v,
+                             sigma=sigma,
+                             num_iter=num_iter,
+                             mc=self.controlled_mc(sigma),
+                             method='value iteration',
+                             epsilon=epsilon,
+                             max_iter=max_iter)
+
+        return res
 
     def policy_iteration(self, w_0=None, max_iter=None):
         # What for initial condition?
@@ -389,7 +386,14 @@ class MDP(object):
 
         num_iter = i + 1
 
-        return v_sigma, sigma, num_iter
+        res = MDPSolveResult(v=v_sigma,
+                             sigma=sigma,
+                             num_iter=num_iter,
+                             mc=self.controlled_mc(sigma),
+                             method='policy iteration',
+                             max_iter=max_iter)
+
+        return res
 
     def modified_policy_iteration(self, w_0=None, epsilon=None, max_iter=None,
                                   k=20):
@@ -421,7 +425,16 @@ class MDP(object):
 
         num_iter = i + 1
 
-        return v, sigma, num_iter
+        res = MDPSolveResult(v=v,
+                             sigma=sigma,
+                             num_iter=num_iter,
+                             mc=self.controlled_mc(sigma),
+                             method='modified policy iteration',
+                             epsilon=epsilon,
+                             max_iter=max_iter,
+                             k=k)
+
+        return res
 
     def controlled_mc(self, sigma):
         """
@@ -432,6 +445,53 @@ class MDP(object):
         if self._sparse:
             Q_sigma = Q_sigma.toarray()
         return MarkovChain(Q_sigma)
+
+
+class MDPSolveResult(dict):
+    """
+    Contain the information about the MDP optimization result.
+
+    Attributes
+    ----------
+    v : ndarray(float, ndim=1)
+        Computed optimal value function
+
+    sigma : ndarray(int, ndim=1)
+        Computed optimal policy function
+
+    num_iter : int
+        Number of iterations
+
+    mc : MarkovChain
+        Controlled Markov chain
+
+    method : str
+        Method employed
+
+    epsilon : float
+        Value of epsilon
+
+    max_iter : int
+        Maximum number of iterations
+
+    """
+    # This is sourced from sicpy.optimize.OptimizeResult.
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(name)
+
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
+    def __repr__(self):
+        if self.keys():
+            m = max(map(len, list(self.keys()))) + 1
+            return '\n'.join([k.rjust(m) + ': ' + repr(v)
+                              for k, v in self.items()])
+        else:
+            return self.__class__.__name__ + "()"
 
 
 @jit(nopython=True)

@@ -54,48 +54,47 @@ class TestMDP:
 
     def test_value_iteration(self):
         for mdp in self.mdps:
-            v, sigma, mc = mdp.solve(method='value_iteration',
-                                     epsilon=self.epsilon)
+            res = mdp.solve(method='value_iteration', epsilon=self.epsilon)
 
             # Check v is an epsilon/2-approxmation of v_star
-            ok_(np.abs(v - self.v_star).max() < self.epsilon/2)
+            ok_(np.abs(res.v - self.v_star).max() < self.epsilon/2)
 
             # Check sigma == sigma_star
-            assert_array_equal(sigma, self.sigma_star)
+            assert_array_equal(res.sigma, self.sigma_star)
 
     def test_policy_iteration(self):
         w_0 = [0, 1]  # Let it iterate more than once
         for mdp in self.mdps:
-            v, sigma, mc = mdp.solve(method='policy_iteration', w_0=w_0)
+            res = mdp.solve(method='policy_iteration', w_0=w_0)
 
             # Check v == v_star
-            assert_allclose(v, self.v_star)
+            assert_allclose(res.v, self.v_star)
 
             # Check sigma == sigma_star
-            assert_array_equal(sigma, self.sigma_star)
+            assert_array_equal(res.sigma, self.sigma_star)
 
     def test_modified_policy_iteration(self):
         for mdp in self.mdps:
-            v, sigma, mc = mdp.solve(method='modified_policy_iteration',
-                                     epsilon=self.epsilon)
+            res = mdp.solve(method='modified_policy_iteration',
+                            epsilon=self.epsilon)
 
             # Check v is an epsilon/2-approxmation of v_star
-            ok_(np.abs(v - self.v_star).max() < self.epsilon/2)
+            ok_(np.abs(res.v - self.v_star).max() < self.epsilon/2)
 
             # Check sigma == sigma_star
-            assert_array_equal(sigma, self.sigma_star)
+            assert_array_equal(res.sigma, self.sigma_star)
 
     def test_modified_policy_iteration_k1(self):
         k = 1
         for mdp in self.mdps:
-            v, sigma, mc = mdp.solve(method='modified_policy_iteration',
-                                     epsilon=self.epsilon, k=k)
+            res = mdp.solve(method='modified_policy_iteration',
+                            epsilon=self.epsilon, k=k)
 
             # Check v is an epsilon/2-approxmation of v_star
-            ok_(np.abs(v - self.v_star).max() < self.epsilon/2)
+            ok_(np.abs(res.v - self.v_star).max() < self.epsilon/2)
 
             # Check sigma == sigma_star
-            assert_array_equal(sigma, self.sigma_star)
+            assert_array_equal(res.sigma, self.sigma_star)
 
 
 if __name__ == '__main__':
