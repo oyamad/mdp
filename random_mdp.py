@@ -14,7 +14,7 @@ from random_stochmatrix import gen_random_stochmatrix, \
 
 
 def random_mdp(num_states, num_actions, beta=None, constraints=None,
-                  k=None, scale=1, sa_pair=False, sparse=False):
+                  k=None, scale=1, sa_pair=False):
     """
     Generate an MDP randomly. The reward values are drawn from the
     normal distribution with mean 0 and standard deviation `scale`.
@@ -49,9 +49,6 @@ def random_mdp(num_states, num_actions, beta=None, constraints=None,
         An instance of MDP.
 
     """
-    if sparse:
-        raise NotImplementedError
-
     if sa_pair:
         if k is None:
             k = num_states
