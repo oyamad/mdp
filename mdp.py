@@ -3,8 +3,8 @@ Filename: mdp.py
 
 Author: Daisuke Oyama
 
-Base class for solving Markov decision processes (MDP) with discrete
-states and actions.
+Module for solving Markov decision processes (MDP) with discrete states
+and actions.
 
 Markov Decision Processes
 -------------------------
@@ -30,45 +30,156 @@ from quantecon import MarkovChain
 
 class MDP(object):
     """
-    Class for dealing with a Markov decision process (MDP) with n states
-    and m actions.
+    Class for dealing with a Markov decision process (MDP) with finite
+    states and actions.
 
-    Work with state-action pairs. Sparse matrices
-    supported. State-action pairs will be sorted in a lexicographic
-    order. Below let L denote the number of feasible state-action pairs.
+    There are two ways to represent the data for instantiating an `MDP`
+    object. Let n, m, and L denote the numbers of states, actions, and
+    feasbile state-action pairs, respectively.
+
+    1. `MDP(R, Q, beta)`
+
+       with parameters:
+
+       * n x m reward array `R`,
+       * n x m x n transition probability array `Q`, and
+       * discount factor beta,
+
+       where `R[s, a]` is the reward for action `a` when the state is
+       `s` and `Q[s, a, s']` is the probability that the state in the
+       next period is `s'` when the current state is `s` and the action
+       chosen is `a`.
+
+    2. `MDP(R, Q, beta, s_indices, a_indices)`
+
+       with parameters:
+
+       * length L reward vector R,
+       * L x n transition probability array `Q`,
+       * discount factor `beta`,
+       * length L array `s_indices`, and
+       * length L array `a_indices`,
+
+       where the pairs (`s_indices[0]`, `a_indices[0]`), ...,
+       (`s_indices[L-1]`, `a_indices[L-1]`) enumerate feasible
+       state-action pairs, and `R[i]` is the reward for action
+       `a_indices[i]` when the state is `s_indices[i]` and `Q[i, s']` is
+       the probability that the state in the next period is `s'` when
+       the current state is `s_indices[i]` and the action chosen is
+       `a_indices[0]`
 
     Parameters
     ----------
-    R : array_like(ndim=1)
-        Array representing the reward function, of length L, where, if i
-        corresponds to (s, a), R[i] is the flow reward when the current
-        state is s and the action chosen is a.
+    R : array_like(float, ndim=2 or 1)
+        Reward array.
 
-    Q : array_like(ndim=2)
-        Array representing the transition probabilities, of shape
-        L x n, where, if i corresponds to (s, a), Q[i, s'] is the
-        probability that the state in the next period is s' when the
-        current state is s and the action chosen is a.
-
-    s_indices : array_like(ndim=1)
-
-    a_indices : array_like(ndim=1)
+    Q : array_like(float, ndim=3 or 2)
+        Transition probability array.
 
     beta : scalar(float)
         Discount factor. Must be in (0, 1).
 
+    s_indices : array_like(int, ndim=1), optional(default=None)
+        Array containing the indices of the states.
+
+    a_indices : array_like(int, ndim=1), optional(default=None)
+        Array containing the indices of the actions.
+
     Attributes
     ----------
     R, Q, beta : see Parameters.
-
-    num_sa_pairs : scalar(int)
-        Number of state-action pairs.
 
     num_states : scalar(int)
         Number of states.
 
     num_actions : scalar(int)
         Number of actions.
+
+    num_sa_pairs : scalar(int)
+        Number of state-action pairs.
+
+    Examples
+    --------
+    Consider the following example, taken from Puterman (2005), Section
+    3.1, pp.33-35.
+
+    * Set of states S = {0, 1}
+
+    * Set of actions A = {0, 1}
+
+    * Set of feasible state-action pairs SA = {(0, 0), (0, 1), (1, 0)}
+
+    * Rewards r(s, a):
+
+          r(0, 0) = 5, r(0, 1) =10, r(1, 0) = -1
+
+    * Transition probabilities q(s'|s, a):
+
+          q(0|0, 0) = 0.5, q(1|0, 0) = 0.5,
+          q(0|0, 1) = 0,   q(1|0, 1) = 1,
+          q(0|1, 0) = 0,   q(1|1, 0) = 1
+
+    * Discount factor 0.95
+
+    **Creating an `MDP` instance**
+
+    *Product formulation*
+
+    This approach uses the product set S x A as the domain by treating
+    action 1 as yielding a reward negative infinity at state 1.
+
+    >>> R = [[5, 10], [-1, -float('inf')]]
+    >>> Q = [[(0.5, 0.5), (0, 1)], [(0, 1), (0.5, 0.5)]]
+    >>> beta = 0.95
+    >>> mdp = MDP(R, Q, beta)
+
+    (`Q[1, 1]` is an arbitrary probability vector.)
+
+    *State-action pairs formulation*
+
+    This approach takes the set of feasible state-action pairs SA as
+    given.
+
+    >>> s_indices = [0, 0, 1]  # State indices
+    >>> a_indices = [0, 1, 0]  # Action indices
+    >>> R = [5, 10, -1]
+    >>> Q = [(0.5, 0.5), (0, 1), (0, 1)]
+    >>> beta = 0.95
+    >>> mdp = MDP(R, Q, beta, s_indices, a_indices)
+
+    **Solving the model**
+
+    *Policy iteration*
+
+    >>> res = mdp.solve(method='policy_iteration', w_0=[0, 0])
+    >>> res.sigma  # Optimal policy function
+    array([0, 0])
+    >>> res.v  # Optimal value function
+    array([ -8.57142857, -20.        ])
+    >>> res.num_iter  # Number of iterations
+    2
+
+    *Value iteration*
+
+    >>> res = mdp.solve(method='value_iteration', w_0=[0, 0],
+    ...                 epsilon=0.01, max_iter=200)
+    >>> res.sigma  # (Approximate) optimal policy function
+    array([0, 0])
+    >>> res.v  # (Approximate) optimal value function
+    array([ -8.5665053 , -19.99507673])
+    >>> res.num_iter  # Number of iterations
+    162
+
+    *Modified policy iteration*
+
+    >>> res = mdp.solve(method='modified_policy_iteration', w_0=[0, 0],
+    ...                 epsilon=0.01, k=5)
+    >>> res.sigma  # (Approximate) optimal policy function
+    array([0, 0])
+    >>> res.v  # (Approximate) optimal value function
+    array([ -8.5702978, -19.9987502])
+    >>> res.num_iter  # Number of iterations
+    4
 
     """
     def __init__(self, R, Q, beta, s_indices=None, a_indices=None):
@@ -92,7 +203,7 @@ class MDP(object):
 
         msg_dimension = 'dimensions of R and Q must be either 1 and 2, ' + \
                         'of 2 and 3'
-        msg_shape = 'shapes of R and Q must either (n, m) or (n, m, n), ' + \
+        msg_shape = 'shapes of R and Q must either (n, m) and (n, m, n), ' + \
                     'or (L,) and (L, n)'
 
         if self._sa_pair:
@@ -140,7 +251,7 @@ class MDP(object):
             def s_wise_max(vals, return_argmax=False):
                 """
                 Return the vector max_a vals(s, a), where vals is represented
-                by a 1-dimensional ndarray of shape  (self.num_sa_pairs,).
+                by a 1-dimensional ndarray of shape (self.num_sa_pairs,).
 
                 """
                 out_max = np.empty(self.num_states)
@@ -166,7 +277,7 @@ class MDP(object):
                 raise ValueError(msg_shape)
 
             self.s_indices, self.a_indices = None, None
-            self.num_sa_pairs = None
+            self.num_sa_pairs = self.num_states * self.num_actions
 
             # Define state-wise maximization
             def s_wise_max(vals, return_argmax=False):
