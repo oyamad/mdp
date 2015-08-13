@@ -3,8 +3,8 @@ Filename: mdp.py
 
 Author: Daisuke Oyama
 
-Base class for solving Markov decision processes (MDP) with discrete
-states and actions.
+Module for solving Markov decision processes (MDP) with discrete states
+and actions.
 
 Markov Decision Processes
 -------------------------
@@ -23,30 +23,67 @@ Programming, Wiley-Interscience, 2005.
 """
 from __future__ import division
 import numpy as np
+import scipy.sparse as sp
+from numba import jit
 from quantecon import MarkovChain
-from random_stochmatrix import gen_random_stochmatrix
 
 
 class MDP(object):
     """
-    Class for dealing with a Markov decision process (MDP) with n states
-    and m actions.
+    Class for dealing with a Markov decision process (MDP) with finite
+    states and actions.
+
+    There are two ways to represent the data for instantiating an `MDP`
+    object. Let n, m, and L denote the numbers of states, actions, and
+    feasbile state-action pairs, respectively.
+
+    1. `MDP(R, Q, beta)`
+
+       with parameters:
+
+       * n x m reward array `R`,
+       * n x m x n transition probability array `Q`, and
+       * discount factor beta,
+
+       where `R[s, a]` is the reward for action `a` when the state is
+       `s` and `Q[s, a, s']` is the probability that the state in the
+       next period is `s'` when the current state is `s` and the action
+       chosen is `a`.
+
+    2. `MDP(R, Q, beta, s_indices, a_indices)`
+
+       with parameters:
+
+       * length L reward vector R,
+       * L x n transition probability array `Q`,
+       * discount factor `beta`,
+       * length L array `s_indices`, and
+       * length L array `a_indices`,
+
+       where the pairs (`s_indices[0]`, `a_indices[0]`), ...,
+       (`s_indices[L-1]`, `a_indices[L-1]`) enumerate feasible
+       state-action pairs, and `R[i]` is the reward for action
+       `a_indices[i]` when the state is `s_indices[i]` and `Q[i, s']` is
+       the probability that the state in the next period is `s'` when
+       the current state is `s_indices[i]` and the action chosen is
+       `a_indices[0]`
 
     Parameters
     ----------
-    R : array_like(ndim=2)
-        Array representing the reward function, of shape n x m, where
-        R[i, a] is the flow reward when the current state is i and the
-        action chosen is a.
+    R : array_like(float, ndim=2 or 1)
+        Reward array.
 
-    Q : array_like(ndim=3)
-        Array representing the transition probabilities, of shape
-        n x m x n, where Q[i, a, j] is the probability that the state in
-        the next period is j when the current state is i and the action
-        chosen is a.
+    Q : array_like(float, ndim=3 or 2)
+        Transition probability array.
 
-    beta : scalar(float), optional(default=0.95)
+    beta : scalar(float)
         Discount factor. Must be in (0, 1).
+
+    s_indices : array_like(int, ndim=1), optional(default=None)
+        Array containing the indices of the states.
+
+    a_indices : array_like(int, ndim=1), optional(default=None)
+        Array containing the indices of the actions.
 
     Attributes
     ----------
@@ -58,20 +95,207 @@ class MDP(object):
     num_actions : scalar(int)
         Number of actions.
 
-    """
-    def __init__(self, R, Q, beta=0.95):
-        self.R, self.Q = np.asarray(R), np.asarray(Q)
-        if self.R.ndim != 2:
-            raise ValueError('R must be 2-dimenstional')
-        self.num_states, self.num_actions = self.R.shape
+    num_sa_pairs : scalar(int)
+        Number of state-action pairs.
 
-        if self.Q.ndim != 3:
-            raise ValueError('Q must be 3-dimenstional')
-        if self.Q.shape != \
-           (self.num_states, self.num_actions, self.num_states):
-            raise ValueError(
-                'R and Q must be of shape n x m and n x m x n, respectively'
-            )
+    Examples
+    --------
+    Consider the following example, taken from Puterman (2005), Section
+    3.1, pp.33-35.
+
+    * Set of states S = {0, 1}
+
+    * Set of actions A = {0, 1}
+
+    * Set of feasible state-action pairs SA = {(0, 0), (0, 1), (1, 0)}
+
+    * Rewards r(s, a):
+
+          r(0, 0) = 5, r(0, 1) =10, r(1, 0) = -1
+
+    * Transition probabilities q(s'|s, a):
+
+          q(0|0, 0) = 0.5, q(1|0, 0) = 0.5,
+          q(0|0, 1) = 0,   q(1|0, 1) = 1,
+          q(0|1, 0) = 0,   q(1|1, 0) = 1
+
+    * Discount factor 0.95
+
+    **Creating an `MDP` instance**
+
+    *Product formulation*
+
+    This approach uses the product set S x A as the domain by treating
+    action 1 as yielding a reward negative infinity at state 1.
+
+    >>> R = [[5, 10], [-1, -float('inf')]]
+    >>> Q = [[(0.5, 0.5), (0, 1)], [(0, 1), (0.5, 0.5)]]
+    >>> beta = 0.95
+    >>> mdp = MDP(R, Q, beta)
+
+    (`Q[1, 1]` is an arbitrary probability vector.)
+
+    *State-action pairs formulation*
+
+    This approach takes the set of feasible state-action pairs SA as
+    given.
+
+    >>> s_indices = [0, 0, 1]  # State indices
+    >>> a_indices = [0, 1, 0]  # Action indices
+    >>> R = [5, 10, -1]
+    >>> Q = [(0.5, 0.5), (0, 1), (0, 1)]
+    >>> beta = 0.95
+    >>> mdp = MDP(R, Q, beta, s_indices, a_indices)
+
+    **Solving the model**
+
+    *Policy iteration*
+
+    >>> res = mdp.solve(method='policy_iteration', w_0=[0, 0])
+    >>> res.sigma  # Optimal policy function
+    array([0, 0])
+    >>> res.v  # Optimal value function
+    array([ -8.57142857, -20.        ])
+    >>> res.num_iter  # Number of iterations
+    2
+
+    *Value iteration*
+
+    >>> res = mdp.solve(method='value_iteration', w_0=[0, 0],
+    ...                 epsilon=0.01, max_iter=200)
+    >>> res.sigma  # (Approximate) optimal policy function
+    array([0, 0])
+    >>> res.v  # (Approximate) optimal value function
+    array([ -8.5665053 , -19.99507673])
+    >>> res.num_iter  # Number of iterations
+    162
+
+    *Modified policy iteration*
+
+    >>> res = mdp.solve(method='modified_policy_iteration', w_0=[0, 0],
+    ...                 epsilon=0.01, k=5)
+    >>> res.sigma  # (Approximate) optimal policy function
+    array([0, 0])
+    >>> res.v  # (Approximate) optimal value function
+    array([ -8.5702978, -19.9987502])
+    >>> res.num_iter  # Number of iterations
+    4
+
+    """
+    def __init__(self, R, Q, beta, s_indices=None, a_indices=None):
+        self._sa_pair = False
+        self._sparse = False
+
+        if sp.issparse(Q):
+            self.Q = Q.tocsr()
+            self._sa_pair = True
+            self._sparse = True
+        else:
+            self.Q = np.asarray(Q)
+            if self.Q.ndim == 2:
+                self._sa_pair = True
+            elif self.Q.ndim != 3:
+                raise ValueError('Q must be 2- or 3-dimensional')
+
+        self.R = np.asarray(R)
+        if not (self.R.ndim in [1, 2]):
+            raise ValueError('R must be 1- or 2-dimensional')
+
+        msg_dimension = 'dimensions of R and Q must be either 1 and 2, ' + \
+                        'of 2 and 3'
+        msg_shape = 'shapes of R and Q must either (n, m) and (n, m, n), ' + \
+                    'or (L,) and (L, n)'
+
+        if self._sa_pair:
+            self.num_sa_pairs, self.num_states = self.Q.shape
+
+            if self.R.ndim != 1:
+                raise ValueError(msg_dimension)
+            if self.R.shape != (self.num_sa_pairs,):
+                raise ValueError(msg_shape)
+
+            if s_indices is None:
+                raise ValueError('s_indices must be supplied')
+            if a_indices is None:
+                raise ValueError('a_indices must be supplied')
+            if not (len(s_indices) == self.num_sa_pairs and
+                    len(a_indices) == self.num_sa_pairs):
+                raise ValueError(
+                    'length of s_indices and a_indices must be equal to ' +
+                    'the number of state-action pairs'
+                )
+
+            # Sort indices and elements of Q
+            sa_ptrs = sp.coo_matrix(
+                (np.arange(self.num_sa_pairs), (s_indices, a_indices))
+            ).tocsr()
+            sa_ptrs.sort_indices()
+            self.a_indices = sa_ptrs.indices
+            self.a_indptr = sa_ptrs.indptr
+            self.num_actions = sa_ptrs.shape[1]
+            if self._sparse:
+                self.Q = sp.csr_matrix(self.Q[sa_ptrs.data])
+            else:
+                self.Q = self.Q[sa_ptrs.data]
+
+            _s_indices = np.empty(self.num_sa_pairs,
+                                  dtype=self.a_indices.dtype)
+            for i in range(self.num_states):
+                for j in range(self.a_indptr[i], self.a_indptr[i+1]):
+                    _s_indices[j] = i
+            self.s_indices = _s_indices
+
+            self.R = self.R[sa_ptrs.data]
+
+            # Define state-wise maximization
+            def s_wise_max(vals, return_argmax=False):
+                """
+                Return the vector max_a vals(s, a), where vals is represented
+                by a 1-dimensional ndarray of shape (self.num_sa_pairs,).
+
+                """
+                out_max = np.empty(self.num_states)
+                if return_argmax:
+                    out_argmax = np.empty(self.num_states, dtype=int)
+                    _s_wise_max_argmax(self.a_indices, self.a_indptr, vals,
+                                       out_max=out_max, out_argmax=out_argmax)
+                    return out_max, out_argmax
+                else:
+                    _s_wise_max(self.a_indices, self.a_indptr, vals,
+                                out_max=out_max)
+                    return out_max
+
+            self.s_wise_max = s_wise_max
+
+        else:  # Not self._sa_pair
+            if self.R.ndim != 2:
+                raise ValueError(msg_dimension)
+            self.num_states, self.num_actions = self.R.shape
+
+            if self.Q.shape != \
+               (self.num_states, self.num_actions, self.num_states):
+                raise ValueError(msg_shape)
+
+            self.s_indices, self.a_indices = None, None
+            self.num_sa_pairs = self.num_states * self.num_actions
+
+            # Define state-wise maximization
+            def s_wise_max(vals, return_argmax=False):
+                """
+                Return the vector max_a vals(s, a), where vals is represented
+                by a 2-dimensional ndarray of shape (self.num_states,
+                self.num_actions).
+
+                """
+                if return_argmax:
+                    out_argmax = vals.argmax(axis=1)
+                    out_max = vals[np.arange(self.num_states), out_argmax]
+                    return out_max, out_argmax
+                else:
+                    out_max = vals.max(axis=1)
+                    return out_max
+
+            self.s_wise_max = s_wise_max
 
         if not (0 < beta < 1):
             raise ValueError('beta must be in (0, 1)')
@@ -80,6 +304,26 @@ class MDP(object):
         self.epsilon = 1e-3
         self.max_iter = 100
         self.tol = 1e-8
+
+        # Linear equation solver to be used in evaluate_policy
+        if self._sparse:
+            self._lineq_solve = sp.linalg.spsolve
+            self._I = sp.identity(self.num_states)
+        else:
+            self._lineq_solve = np.linalg.solve
+            self._I = np.identity(self.num_states)
+
+    def RQ_sigma(self, sigma):
+        if self._sa_pair:
+            sigma_indices = np.empty(self.num_states, dtype=int)
+            _find_indices(self.a_indices, self.a_indptr, sigma,
+                          out=sigma_indices)
+            R_sigma, Q_sigma = self.R[sigma_indices], self.Q[sigma_indices]
+        else:
+            R_sigma = self.R[np.arange(self.num_states), sigma]
+            Q_sigma = self.Q[np.arange(self.num_states), sigma]
+
+        return R_sigma, Q_sigma
 
     def bellman_operator(self, w, compute_policy=False):
         """
@@ -104,14 +348,13 @@ class MDP(object):
             `compute_policy=True`.
 
         """
-        vals = self.R + self.beta * self.Q.dot(w)  # n x m
+        vals = self.R + self.beta * self.Q.dot(w)  # Shape: (L,) or (n, m)
 
         if compute_policy:
-            sigma = vals.argmax(axis=1)
-            Tw = vals[np.arange(self.num_states), sigma]
+            Tw, sigma = self.s_wise_max(vals, return_argmax=True)
             return Tw, sigma
         else:
-            Tw = vals.max(axis=1)
+            Tw = self.s_wise_max(vals)
             return Tw
 
     def T_sigma(self, sigma):
@@ -129,9 +372,7 @@ class MDP(object):
             The T_sigma operator.
 
         """
-        # Faster than vals[np.arange(self.num_states), sigma]
-        R_sigma = self.R[np.arange(self.num_states), sigma]
-        Q_sigma = self.Q[np.arange(self.num_states), sigma]
+        R_sigma, Q_sigma = self.RQ_sigma(sigma)
         return lambda w: R_sigma + self.beta * Q_sigma.dot(w)
 
     def compute_greedy(self, w):
@@ -168,42 +409,33 @@ class MDP(object):
 
         """
         # Solve (I - beta * Q_sigma) v = R_sigma for v
-        R_sigma = self.R[np.arange(self.num_states), sigma]
-        Q_sigma = self.Q[np.arange(self.num_states), sigma]
-        A = np.identity(self.num_states) - self.beta * Q_sigma
+        R_sigma, Q_sigma = self.RQ_sigma(sigma)
         b = R_sigma
-        v_sigma = np.linalg.solve(A, b)
+
+        A = self._I - self.beta * Q_sigma
+
+        v_sigma = self._lineq_solve(A, b)
+
         return v_sigma
 
     def solve(self, method='policy_iteration',
-              w_0=None, epsilon=None, max_iter=None, return_num_iter=False,
-              k=20):
+              w_0=None, epsilon=None, max_iter=None, k=20):
         """
         Solve the dynamic programming problem.
 
         """
         if method in ['value_iteration', 'vi']:
-            v_star, sigma_star, num_iter = \
-                self.value_iteration(
-                    w_0=w_0, epsilon=epsilon, max_iter=max_iter
-                )
+            res = self.value_iteration(w_0=w_0, epsilon=epsilon,
+                                       max_iter=max_iter)
         elif method in ['policy_iteration', 'pi']:
-            v_star, sigma_star, num_iter = \
-                self.policy_iteration(w_0=w_0, max_iter=max_iter)
+            res = self.policy_iteration(w_0=w_0, max_iter=max_iter)
         elif method in ['modified_policy_iteration', 'mpi']:
-            v_star, sigma_star, num_iter = \
-                self.modified_policy_iteration(
-                    w_0=w_0, epsilon=epsilon, max_iter=max_iter, k=k
-                )
+            res = self.modified_policy_iteration(w_0=w_0, epsilon=epsilon,
+                                                 max_iter=max_iter, k=k)
         else:
-            raise ValueError
+            raise ValueError('invalid method')
 
-        mc = self.controlled_mc(sigma_star)
-
-        if return_num_iter:
-            return v_star, sigma_star, mc, num_iter
-        else:
-            return v_star, sigma_star, mc
+        return res
 
     def successive_approx(self, T, w_0, tol, max_iter):
         # May be replaced with quantecon.compute_fixed_point
@@ -224,7 +456,7 @@ class MDP(object):
 
     def value_iteration(self, w_0=None, epsilon=None, max_iter=None):
         if w_0 is None:
-            w_0 = self.R.max(axis=1)
+            w_0 = self.s_wise_max(self.R)
         if max_iter is None:
             max_iter = self.max_iter
         if epsilon is None:
@@ -236,12 +468,20 @@ class MDP(object):
                                    w_0=w_0, tol=tol, max_iter=max_iter)
         sigma = self.compute_greedy(v)
 
-        return v, sigma, num_iter
+        res = MDPSolveResult(v=v,
+                             sigma=sigma,
+                             num_iter=num_iter,
+                             mc=self.controlled_mc(sigma),
+                             method='value iteration',
+                             epsilon=epsilon,
+                             max_iter=max_iter)
+
+        return res
 
     def policy_iteration(self, w_0=None, max_iter=None):
         # What for initial condition?
         if w_0 is None:
-            w_0 = self.R.max(axis=1)
+            w_0 = self.s_wise_max(self.R)
         if max_iter is None:
             max_iter = self.max_iter
 
@@ -257,12 +497,19 @@ class MDP(object):
 
         num_iter = i + 1
 
-        return v_sigma, sigma, num_iter
+        res = MDPSolveResult(v=v_sigma,
+                             sigma=sigma,
+                             num_iter=num_iter,
+                             mc=self.controlled_mc(sigma),
+                             method='policy iteration',
+                             max_iter=max_iter)
+
+        return res
 
     def modified_policy_iteration(self, w_0=None, epsilon=None, max_iter=None,
                                   k=20):
         if w_0 is None:
-            w_0 = self.R.max(axis=1)
+            w_0 = self.s_wise_max(self.R)
         if max_iter is None:
             max_iter = self.max_iter
         if epsilon is None:
@@ -289,71 +536,104 @@ class MDP(object):
 
         num_iter = i + 1
 
-        return v, sigma, num_iter
+        res = MDPSolveResult(v=v,
+                             sigma=sigma,
+                             num_iter=num_iter,
+                             mc=self.controlled_mc(sigma),
+                             method='modified policy iteration',
+                             epsilon=epsilon,
+                             max_iter=max_iter,
+                             k=k)
+
+        return res
 
     def controlled_mc(self, sigma):
         """
         Returns the controlled Markov chain for a given policy `sigma`.
 
         """
-        P = self.Q[np.arange(self.num_states), sigma]
-        return MarkovChain(P)
+        _, Q_sigma = self.RQ_sigma(sigma)
+        if self._sparse:
+            Q_sigma = Q_sigma.toarray()
+        return MarkovChain(Q_sigma)
 
 
-def random_mdp(num_states, num_actions, beta=None, constraints=None,
-               k=None, scale=1, sparse=False):
+class MDPSolveResult(dict):
     """
-    Generate an MDP randomly. The reward values are drawn from the
-    normal distribution with mean 0 and standard deviation `scale`.
+    Contain the information about the MDP optimization result.
 
-    Parameters
+    Attributes
     ----------
-    num_states : scalar(int)
-        Number of states.
+    v : ndarray(float, ndim=1)
+        Computed optimal value function
 
-    num_actions : scalar(int)
-        Number of actions.
+    sigma : ndarray(int, ndim=1)
+        Computed optimal policy function
 
-    beta : scalar(float), optional
-        Discount factor. Randomly chosen from (0, 1) if not specified.
+    num_iter : int
+        Number of iterations
 
-    constraints : array_like(bool, ndim=2), optional
-        Array of shape (num_states, num_actions) representing the
-        constraints. If constraints[s, a] = False, then the flow reward
-        of action a for state s will be set to `-inf`.
+    mc : MarkovChain
+        Controlled Markov chain
 
-    k : scalar(int), optional
-        Number of possible next states for each state-action pair. Equal
-        to `num_states` if not specified.
+    method : str
+        Method employed
 
-    scale : scalar(float), optional(default=1)
-        Standard deviation of the normal distribution for the reward
-        values.
+    epsilon : float
+        Value of epsilon
 
-    sparse : bool, optional(default=False)
-        (Sparse matrices are not supported yet.)
-
-    Returns
-    -------
-    mdp : MDP
-        An instance of MDP.
+    max_iter : int
+        Maximum number of iterations
 
     """
-    R = scale * np.random.randn(num_states, num_actions)
-    if constraints is not None:
-        R[np.where(np.asarray(constraints) is False)] = -np.inf
+    # This is sourced from sicpy.optimize.OptimizeResult.
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(name)
 
-    if sparse:
-        raise NotImplementedError
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
 
-    Q = np.empty((num_states, num_actions, num_states))
-    Ps = gen_random_stochmatrix(num_states, k=k, num_matrices=num_actions,
-                                sparse=sparse)
-    for a, P in enumerate(Ps):
-        Q[:, a, :] = P
+    def __repr__(self):
+        if self.keys():
+            m = max(map(len, list(self.keys()))) + 1
+            return '\n'.join([k.rjust(m) + ': ' + repr(v)
+                              for k, v in self.items()])
+        else:
+            return self.__class__.__name__ + "()"
 
-    if beta is None:
-        beta = np.random.rand(1)[0]
 
-    mdp = MDP(R, Q, beta)
-    return mdp
+@jit(nopython=True)
+def _s_wise_max_argmax(a_indices, a_indptr, vals, out_max, out_argmax):
+    n = len(out_max)
+    for i in range(n):
+        if a_indptr[i] != a_indptr[i+1]:
+            m = a_indptr[i]
+            for j in range(a_indptr[i]+1, a_indptr[i+1]):
+                if vals[j] > vals[m]:
+                    m = j
+            out_max[i] = vals[m]
+            out_argmax[i] = a_indices[m]
+
+
+@jit(nopython=True)
+def _s_wise_max(a_indices, a_indptr, vals, out_max):
+    n = len(out_max)
+    for i in range(n):
+        if a_indptr[i] != a_indptr[i+1]:
+            m = a_indptr[i]
+            for j in range(a_indptr[i]+1, a_indptr[i+1]):
+                if vals[j] > vals[m]:
+                    m = j
+            out_max[i] = vals[m]
+
+
+@jit(nopython=True)
+def _find_indices(a_indices, a_indptr, sigma, out):
+    n = len(sigma)
+    for i in range(n):
+        for j in range(a_indptr[i], a_indptr[i+1]):
+            if sigma[i] == a_indices[j]:
+                out[i] = j
