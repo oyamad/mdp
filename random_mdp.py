@@ -79,8 +79,7 @@ def random_mdp(num_states, num_actions, beta=None, constraints=None,
             R[np.where(np.asarray(constraints) is False)] = -np.inf
 
         Q = np.empty((num_states, num_actions, num_states))
-        Ps = gen_random_stochmatrix(num_states, k=k, num_matrices=num_actions,
-                                    sparse=sparse)
+        Ps = gen_random_stochmatrix(num_states, k=k, num_matrices=num_actions)
         for a, P in enumerate(Ps):
             Q[:, a, :] = P
 
