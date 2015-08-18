@@ -395,7 +395,6 @@ class MDP(object):
 
         self.epsilon = 1e-3
         self.max_iter = 100
-        self.tol = 1e-8
 
         # Linear equation solver to be used in evaluate_policy
         if self._sparse:
@@ -609,7 +608,7 @@ class MDP(object):
         w = w_0
         for i in range(max_iter):
             new_w = T(w)
-            if np.abs(new_w - w).max() < tol:
+            if tol > 0 and np.abs(new_w - w).max() < tol:
                 w = new_w
                 break
             w[:] = new_w
@@ -711,7 +710,7 @@ class MDP(object):
             # Partial policy evaluation with k iterations
             v, _ = \
                 self.successive_approx(T=self.T_sigma(sigma), w_0=u,
-                                       tol=self.tol, max_iter=k)
+                                       tol=0, max_iter=k)
 
         num_iter = i + 1
 
