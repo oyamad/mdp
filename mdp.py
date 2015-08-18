@@ -608,8 +608,7 @@ class MDP(object):
         if max_iter <= 0:
             return v_init, 0
 
-        v_init = np.asarray(v_init)
-        v = v_init
+        v = np.asarray(v_init)
         for i in range(max_iter):
             new_v = T(v)
             if tol > 0 and np.abs(new_v - v).max() < tol:
