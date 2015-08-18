@@ -56,33 +56,50 @@ class TestMDP:
         for mdp in self.mdps:
             res = mdp.solve(method='value_iteration', epsilon=self.epsilon)
 
+            v_init = [0, 0]
+            res_init = mdp.solve(method='value_iteration', v_init=v_init,
+                                 epsilon=self.epsilon)
+
             # Check v is an epsilon/2-approxmation of v_star
             ok_(np.abs(res.v - self.v_star).max() < self.epsilon/2)
+            ok_(np.abs(res_init.v - self.v_star).max() < self.epsilon/2)
 
             # Check sigma == sigma_star
             assert_array_equal(res.sigma, self.sigma_star)
+            assert_array_equal(res_init.sigma, self.sigma_star)
 
     def test_policy_iteration(self):
-        v_init = [0, 1]  # Let it iterate more than once
         for mdp in self.mdps:
-            res = mdp.solve(method='policy_iteration', v_init=v_init)
+            res = mdp.solve(method='policy_iteration')
+
+            v_init = [0, 1]
+            res_init = mdp.solve(method='policy_iteration', v_init=v_init)
 
             # Check v == v_star
             assert_allclose(res.v, self.v_star)
+            assert_allclose(res_init.v, self.v_star)
 
             # Check sigma == sigma_star
             assert_array_equal(res.sigma, self.sigma_star)
+            assert_array_equal(res_init.sigma, self.sigma_star)
 
     def test_modified_policy_iteration(self):
         for mdp in self.mdps:
             res = mdp.solve(method='modified_policy_iteration',
                             epsilon=self.epsilon)
 
+            v_init = [0, 1]
+            res_init = mdp.solve(method='modified_policy_iteration',
+                                 v_init=v_init,
+                                 epsilon=self.epsilon)
+
             # Check v is an epsilon/2-approxmation of v_star
             ok_(np.abs(res.v - self.v_star).max() < self.epsilon/2)
+            ok_(np.abs(res_init.v - self.v_star).max() < self.epsilon/2)
 
             # Check sigma == sigma_star
             assert_array_equal(res.sigma, self.sigma_star)
+            assert_array_equal(res_init.sigma, self.sigma_star)
 
     def test_modified_policy_iteration_k0(self):
         k = 0

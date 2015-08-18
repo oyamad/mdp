@@ -615,7 +615,7 @@ class MDP(object):
             if tol > 0 and np.abs(new_v - v).max() < tol:
                 v = new_v
                 break
-            v[:] = new_v
+            v = new_v
 
         num_iter = i + 1
 
