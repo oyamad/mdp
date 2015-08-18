@@ -243,7 +243,7 @@ class MDP(object):
 
     *Policy iteration*
 
-    >>> res = mdp.solve(method='policy_iteration', w_0=[0, 0])
+    >>> res = mdp.solve(method='policy_iteration', v_init=[0, 0])
     >>> res.sigma  # Optimal policy function
     array([0, 0])
     >>> res.v  # Optimal value function
@@ -253,7 +253,7 @@ class MDP(object):
 
     *Value iteration*
 
-    >>> res = mdp.solve(method='value_iteration', w_0=[0, 0],
+    >>> res = mdp.solve(method='value_iteration', v_init=[0, 0],
     ...                 epsilon=0.01, max_iter=200)
     >>> res.sigma  # (Approximate) optimal policy function
     array([0, 0])
@@ -264,7 +264,7 @@ class MDP(object):
 
     *Modified policy iteration*
 
-    >>> res = mdp.solve(method='modified_policy_iteration', w_0=[0, 0],
+    >>> res = mdp.solve(method='modified_policy_iteration', v_init=[0, 0],
     ...                 epsilon=0.01)
     >>> res.sigma  # (Approximate) optimal policy function
     array([0, 0])
@@ -435,37 +435,37 @@ class MDP(object):
 
         return R_sigma, Q_sigma
 
-    def bellman_operator(self, w, compute_policy=False):
+    def bellman_operator(self, v, compute_policy=False):
         """
         The Bellman operator, which computes and returns the updated
-        value function Tw for a value function w.
+        value function Tv for a value function v.
 
         Parameters
         ----------
-        w : array_like(float, ndim=1)
+        v : array_like(float, ndim=1)
             Value function vector, of length n.
 
         compute_policy : bool, optional(default=False)
-            Whether or not to additionally return the w-greedy policy.
+            Whether or not to additionally return the v-greedy policy.
 
         Returns
         -------
-        Tw : ndarray(float, ndim=1)
+        Tv : ndarray(float, ndim=1)
             Updated value function vector, of length n.
 
         sigma : ndarray(int, ndim=1)
-            w-greedy policy vector, of length n. Only returned if
+            v-greedy policy vector, of length n. Only returned if
             `compute_policy=True`.
 
         """
-        vals = self.R + self.beta * self.Q.dot(w)  # Shape: (L,) or (n, m)
+        vals = self.R + self.beta * self.Q.dot(v)  # Shape: (L,) or (n, m)
 
         if compute_policy:
-            Tw, sigma = self.s_wise_max(vals, return_argmax=True)
-            return Tw, sigma
+            Tv, sigma = self.s_wise_max(vals, return_argmax=True)
+            return Tv, sigma
         else:
-            Tw = self.s_wise_max(vals)
-            return Tw
+            Tv = self.s_wise_max(vals)
+            return Tv
 
     def T_sigma(self, sigma):
         """
@@ -483,24 +483,24 @@ class MDP(object):
 
         """
         R_sigma, Q_sigma = self.RQ_sigma(sigma)
-        return lambda w: R_sigma + self.beta * Q_sigma.dot(w)
+        return lambda v: R_sigma + self.beta * Q_sigma.dot(v)
 
-    def compute_greedy(self, w):
+    def compute_greedy(self, v):
         """
-        Compute the w-greedy policy.
+        Compute the v-greedy policy.
 
         Parameters
         ----------
-        w : array_like(float, ndim=1)
+        v : array_like(float, ndim=1)
             Value function vector, of length n.
 
         Returns
         -------
         sigma : ndarray(int, ndim=1)
-            w-greedy policy vector, of length n.
+            v-greedy policy vector, of length n.
 
         """
-        _, sigma = self.bellman_operator(w, compute_policy=True)
+        _, sigma = self.bellman_operator(v, compute_policy=True)
         return sigma
 
     def evaluate_policy(self, sigma):
@@ -529,7 +529,7 @@ class MDP(object):
         return v_sigma
 
     def solve(self, method='policy_iteration',
-              w_0=None, epsilon=None, max_iter=None, k=20):
+              v_init=None, epsilon=None, max_iter=None, k=20):
         """
         Solve the dynamic programming problem.
 
@@ -540,9 +540,9 @@ class MDP(object):
                  optinal(default='policy_iteration')
             Solution method.
 
-        w_0 : array_like(float, ndim=1), optional(default=None)
-            Initial value function, of length n. If None, set w_0(s) =
-            max_a r(s, a).
+        v_init : array_like(float, ndim=1), optional(default=None)
+            Initial value function, of length n. If None, set v_init(s)
+            = max_a r(s, a).
 
         epsilon : scalar(float), optional(default=None)
             Value for epsilon-optimality. If None, the value stored in
@@ -564,28 +564,32 @@ class MDP(object):
 
         """
         if method in ['value_iteration', 'vi']:
-            res = self.value_iteration(w_0=w_0, epsilon=epsilon,
+            res = self.value_iteration(v_init=v_init,
+                                       epsilon=epsilon,
                                        max_iter=max_iter)
         elif method in ['policy_iteration', 'pi']:
-            res = self.policy_iteration(w_0=w_0, max_iter=max_iter)
+            res = self.policy_iteration(v_init=v_init,
+                                        max_iter=max_iter)
         elif method in ['modified_policy_iteration', 'mpi']:
-            res = self.modified_policy_iteration(w_0=w_0, epsilon=epsilon,
-                                                 max_iter=max_iter, k=k)
+            res = self.modified_policy_iteration(v_init=v_init,
+                                                 epsilon=epsilon,
+                                                 max_iter=max_iter,
+                                                 k=k)
         else:
             raise ValueError('invalid method')
 
         return res
 
-    def successive_approx(self, T, w_0, tol, max_iter):
+    def successive_approx(self, T, v_init, tol, max_iter):
         """
-        Successively apply the operator `T` to `w_0`.
+        Successively apply the operator `T` to `v_init`.
 
         Parameters
         ----------
         T : callable
-            Operator that acts on `w_0`.
+            Operator that acts on `v_init`.
 
-        w_0 : array_like
+        v_init : array_like
             Object on which `T` acts.
 
         tol : scalar(float)
@@ -596,35 +600,35 @@ class MDP(object):
 
         Returns
         -------
-        w : ndarray
-            Array given by `T^k w_0`.
+        v : ndarray
+            Array given by `T^k v_init`.
 
         """
         # May be replaced with quantecon.compute_fixed_point
         if max_iter <= 0:
-            return w_0, 0
+            return v_init, 0
 
-        w_0 = np.asarray(w_0)
-        w = w_0
+        v_init = np.asarray(v_init)
+        v = v_init
         for i in range(max_iter):
-            new_w = T(w)
-            if tol > 0 and np.abs(new_w - w).max() < tol:
-                w = new_w
+            new_v = T(v)
+            if tol > 0 and np.abs(new_v - v).max() < tol:
+                v = new_v
                 break
-            w[:] = new_w
+            v[:] = new_v
 
         num_iter = i + 1
 
-        return w, num_iter
+        return v, num_iter
 
-    def value_iteration(self, w_0=None, epsilon=None, max_iter=None):
+    def value_iteration(self, v_init=None, epsilon=None, max_iter=None):
         """
         Solve the optimization problem by value iteration. See the
         `solve` method.
 
         """
-        if w_0 is None:
-            w_0 = self.s_wise_max(self.R)
+        if v_init is None:
+            v_init = self.s_wise_max(self.R)
         if max_iter is None:
             max_iter = self.max_iter
         if epsilon is None:
@@ -633,7 +637,7 @@ class MDP(object):
         tol = epsilon * (1-self.beta) / (2*self.beta)
         v, num_iter = \
             self.successive_approx(T=self.bellman_operator,
-                                   w_0=w_0, tol=tol, max_iter=max_iter)
+                                   v_init=v_init, tol=tol, max_iter=max_iter)
         sigma = self.compute_greedy(v)
 
         res = MDPSolveResult(v=v,
@@ -646,19 +650,19 @@ class MDP(object):
 
         return res
 
-    def policy_iteration(self, w_0=None, max_iter=None):
+    def policy_iteration(self, v_init=None, max_iter=None):
         """
         Solve the optimization problem by policy iteration. See the
         `solve` method.
 
         """
         # What for initial condition?
-        if w_0 is None:
-            w_0 = self.s_wise_max(self.R)
+        if v_init is None:
+            v_init = self.s_wise_max(self.R)
         if max_iter is None:
             max_iter = self.max_iter
 
-        sigma = self.compute_greedy(w_0)
+        sigma = self.compute_greedy(v_init)
         for i in range(max_iter):
             # Policy evaluation
             v_sigma = self.evaluate_policy(sigma)
@@ -679,15 +683,15 @@ class MDP(object):
 
         return res
 
-    def modified_policy_iteration(self, w_0=None, epsilon=None, max_iter=None,
-                                  k=20):
+    def modified_policy_iteration(self, v_init=None, epsilon=None,
+                                  max_iter=None, k=20):
         """
         Solve the optimization problem by modified policy iteration. See
         the `solve` method.
 
         """
-        if w_0 is None:
-            w_0 = self.s_wise_max(self.R)
+        if v_init is None:
+            v_init = self.s_wise_max(self.R)
         if max_iter is None:
             max_iter = self.max_iter
         if epsilon is None:
@@ -699,7 +703,7 @@ class MDP(object):
         def midrange(z):
             return (z.min() + z.max()) / 2
 
-        v = w_0
+        v = v_init
         for i in range(max_iter):
             # Policy improvement
             u, sigma = self.bellman_operator(v, compute_policy=True)
@@ -709,7 +713,7 @@ class MDP(object):
                 break
             # Partial policy evaluation with k iterations
             v, _ = \
-                self.successive_approx(T=self.T_sigma(sigma), w_0=u,
+                self.successive_approx(T=self.T_sigma(sigma), v_init=u,
                                        tol=0, max_iter=k)
 
         num_iter = i + 1

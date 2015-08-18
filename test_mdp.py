@@ -63,9 +63,9 @@ class TestMDP:
             assert_array_equal(res.sigma, self.sigma_star)
 
     def test_policy_iteration(self):
-        w_0 = [0, 1]  # Let it iterate more than once
+        v_init = [0, 1]  # Let it iterate more than once
         for mdp in self.mdps:
-            res = mdp.solve(method='policy_iteration', w_0=w_0)
+            res = mdp.solve(method='policy_iteration', v_init=v_init)
 
             # Check v == v_star
             assert_allclose(res.v, self.v_star)
