@@ -84,8 +84,8 @@ class TestMDP:
             # Check sigma == sigma_star
             assert_array_equal(res.sigma, self.sigma_star)
 
-    def test_modified_policy_iteration_k1(self):
-        k = 1
+    def test_modified_policy_iteration_k0(self):
+        k = 0
         for mdp in self.mdps:
             res = mdp.solve(method='modified_policy_iteration',
                             epsilon=self.epsilon, k=k)
