@@ -340,22 +340,23 @@ class MDP(object):
             self.R = self.R[sa_ptrs.data]
 
             # Define state-wise maximization
-            def s_wise_max(vals, return_argmax=False):
+            def s_wise_max(vals, out=None, out_argmax=None):
                 """
                 Return the vector max_a vals(s, a), where vals is represented
                 by a 1-dimensional ndarray of shape (self.num_sa_pairs,).
+                out and out_argmax must be of length self.num_states; dtype of
+                out_argmax must be int.
 
                 """
-                out_max = np.empty(self.num_states)
-                if return_argmax:
-                    out_argmax = np.empty(self.num_states, dtype=int)
-                    _s_wise_max_argmax(self.a_indices, self.a_indptr, vals,
-                                       out_max=out_max, out_argmax=out_argmax)
-                    return out_max, out_argmax
-                else:
+                if out is None:
+                    out = np.empty(self.num_states)
+                if out_argmax is None:
                     _s_wise_max(self.a_indices, self.a_indptr, vals,
-                                out_max=out_max)
-                    return out_max
+                                out_max=out)
+                else:
+                    _s_wise_max_argmax(self.a_indices, self.a_indptr, vals,
+                                       out_max=out, out_argmax=out_argmax)
+                return out
 
             self.s_wise_max = s_wise_max
 
@@ -372,20 +373,24 @@ class MDP(object):
             self.num_sa_pairs = self.num_states * self.num_actions
 
             # Define state-wise maximization
-            def s_wise_max(vals, return_argmax=False):
+            def s_wise_max(vals, out=None, out_argmax=None):
                 """
                 Return the vector max_a vals(s, a), where vals is represented
                 by a 2-dimensional ndarray of shape (self.num_states,
-                self.num_actions).
+                self.num_actions). Stored in out, which must be of length
+                self.num_states.
+                out and out_argmax must be of length self.num_states; dtype of
+                out_argmax must be int.
 
                 """
-                if return_argmax:
-                    out_argmax = vals.argmax(axis=1)
-                    out_max = vals[np.arange(self.num_states), out_argmax]
-                    return out_max, out_argmax
+                if out is None:
+                    out = np.empty(self.num_states)
+                if out_argmax is None:
+                    vals.max(axis=1, out=out)
                 else:
-                    out_max = vals.max(axis=1)
-                    return out_max
+                    vals.argmax(axis=1, out=out_argmax)
+                    out[:] = vals[np.arange(self.num_states), out_argmax]
+                return out
 
             self.s_wise_max = s_wise_max
 
@@ -435,7 +440,7 @@ class MDP(object):
 
         return R_sigma, Q_sigma
 
-    def bellman_operator(self, v, compute_policy=False):
+    def bellman_operator(self, v, Tv=None, sigma=None):
         """
         The Bellman operator, which computes and returns the updated
         value function Tv for a value function v.
@@ -445,27 +450,25 @@ class MDP(object):
         v : array_like(float, ndim=1)
             Value function vector, of length n.
 
-        compute_policy : bool, optional(default=False)
-            Whether or not to additionally return the v-greedy policy.
+        Tv : ndarray(float, ndim=1), optional(default=None)
+            Optional output array for Tv.
+
+        sigma : ndarray(int, ndim=1), optional(default=None)
+            If not None, the v-greedy policy vector is stored in this
+            array. Must be of length n.
 
         Returns
         -------
         Tv : ndarray(float, ndim=1)
             Updated value function vector, of length n.
 
-        sigma : ndarray(int, ndim=1)
-            v-greedy policy vector, of length n. Only returned if
-            `compute_policy=True`.
-
         """
         vals = self.R + self.beta * self.Q.dot(v)  # Shape: (L,) or (n, m)
 
-        if compute_policy:
-            Tv, sigma = self.s_wise_max(vals, return_argmax=True)
-            return Tv, sigma
-        else:
-            Tv = self.s_wise_max(vals)
-            return Tv
+        if Tv is None:
+            Tv = np.empty(self.num_states)
+        self.s_wise_max(vals, out=Tv, out_argmax=sigma)
+        return Tv
 
     def T_sigma(self, sigma):
         """
@@ -485,7 +488,7 @@ class MDP(object):
         R_sigma, Q_sigma = self.RQ_sigma(sigma)
         return lambda v: R_sigma + self.beta * Q_sigma.dot(v)
 
-    def compute_greedy(self, v):
+    def compute_greedy(self, v, sigma=None):
         """
         Compute the v-greedy policy.
 
@@ -494,13 +497,18 @@ class MDP(object):
         v : array_like(float, ndim=1)
             Value function vector, of length n.
 
+        sigma : ndarray(int, ndim=1), optional(default=None)
+            Optional output array for sigma.
+
         Returns
         -------
         sigma : ndarray(int, ndim=1)
             v-greedy policy vector, of length n.
 
         """
-        _, sigma = self.bellman_operator(v, compute_policy=True)
+        if sigma is None:
+            sigma = np.empty(self.num_states, dtype=int)
+        self.bellman_operator(v, sigma=sigma)
         return sigma
 
     def evaluate_policy(self, sigma):
@@ -580,16 +588,16 @@ class MDP(object):
 
         return res
 
-    def successive_approx(self, T, v_init, tol, max_iter):
+    def successive_approx(self, T, v, tol, max_iter, *args, **kwargs):
         """
-        Successively apply the operator `T` to `v_init`.
+        Successively apply the operator `T` to `v`.
 
         Parameters
         ----------
         T : callable
-            Operator that acts on `v_init`.
+            Operator that acts on `v`.
 
-        v_init : array_like
+        v : ndarray
             Object on which `T` acts.
 
         tol : scalar(float)
@@ -598,23 +606,26 @@ class MDP(object):
         max_iter : scalar(int)
             Maximum number of iterations.
 
+        args, kwargs :
+            Other arguments and keyword arguments that are passed
+            directly to the function T each time it is called.
+
         Returns
         -------
         v : ndarray
-            Array given by `T^k v_init`.
+            Array given by `T^k v`.
 
         """
         # May be replaced with quantecon.compute_fixed_point
         if max_iter <= 0:
-            return v_init, 0
+            return v, 0
 
-        v = np.asarray(v_init)
         for i in range(max_iter):
-            new_v = T(v)
+            new_v = T(v, *args, **kwargs)
             if tol > 0 and np.abs(new_v - v).max() < tol:
-                v = new_v
+                v[:] = new_v
                 break
-            v = new_v
+            v[:] = new_v
 
         num_iter = i + 1
 
@@ -626,17 +637,26 @@ class MDP(object):
         `solve` method.
 
         """
-        if v_init is None:
-            v_init = self.s_wise_max(self.R)
         if max_iter is None:
             max_iter = self.max_iter
         if epsilon is None:
             epsilon = self.epsilon
 
         tol = epsilon * (1-self.beta) / (2*self.beta)
+
+        v = np.empty(self.num_states)
+        if v_init is None:
+            self.s_wise_max(self.R, out=v)
+        else:
+            v[:] = v_init
+
+        # Storage array for self.bellman_operator
+        Tv = np.empty(self.num_states)
+
         v, num_iter = \
             self.successive_approx(T=self.bellman_operator,
-                                   v_init=v_init, tol=tol, max_iter=max_iter)
+                                   v=v, tol=tol, max_iter=max_iter,
+                                   Tv=Tv)
         sigma = self.compute_greedy(v)
 
         res = MDPSolveResult(v=v,
@@ -655,21 +675,24 @@ class MDP(object):
         `solve` method.
 
         """
-        # What for initial condition?
-        if v_init is None:
-            v_init = self.s_wise_max(self.R)
         if max_iter is None:
             max_iter = self.max_iter
 
+        # What for initial condition?
+        if v_init is None:
+            v_init = self.s_wise_max(self.R)
+
         sigma = self.compute_greedy(v_init)
+        new_sigma = np.empty(self.num_states, dtype=int)
+
         for i in range(max_iter):
             # Policy evaluation
             v_sigma = self.evaluate_policy(sigma)
             # Policy improvement
-            new_sigma = self.compute_greedy(v_sigma)
+            self.compute_greedy(v_sigma, sigma=new_sigma)
             if np.array_equal(new_sigma, sigma):
                 break
-            sigma = new_sigma
+            sigma[:] = new_sigma
 
         num_iter = i + 1
 
@@ -689,8 +712,6 @@ class MDP(object):
         the `solve` method.
 
         """
-        if v_init is None:
-            v_init = self.s_wise_max(self.R)
         if max_iter is None:
             max_iter = self.max_iter
         if epsilon is None:
@@ -702,18 +723,27 @@ class MDP(object):
         def midrange(z):
             return (z.min() + z.max()) / 2
 
-        v = v_init
+        v = np.empty(self.num_states)
+        if v_init is None:
+            self.s_wise_max(self.R, out=v)
+        else:
+            v[:] = v_init
+
+        u = np.empty(self.num_states)
+        sigma = np.empty(self.num_states, dtype=int)
+
         for i in range(max_iter):
             # Policy improvement
-            u, sigma = self.bellman_operator(v, compute_policy=True)
+            self.bellman_operator(v, Tv=u, sigma=sigma)
             diff = u - v
             if span(diff) < epsilon * (1-self.beta) / self.beta:
-                v = u + midrange(diff) * self.beta / (1 - self.beta)
+                v[:] = u + midrange(diff) * self.beta / (1 - self.beta)
                 break
             # Partial policy evaluation with k iterations
-            v, _ = \
-                self.successive_approx(T=self.T_sigma(sigma), v_init=u,
+            out, _ = \
+                self.successive_approx(T=self.T_sigma(sigma), v=u,
                                        tol=0, max_iter=k)
+            v[:] = out
 
         num_iter = i + 1
 
