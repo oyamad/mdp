@@ -3,20 +3,105 @@ Filename: mdp.py
 
 Author: Daisuke Oyama
 
-Module for solving Markov decision processes (MDP) with discrete states
+Module for solving Markov decision processes (MDP) with finite states
 and actions.
 
 Markov Decision Processes
 -------------------------
 
+A finite Markov decision process consists of the following components:
+
+* finite set of states :math:`S = \{0, \ldots, n-1\}`;
+* finite set of available actions :math:`A(s)` for each state :math:`s
+  \in S` with :math:`A = \bigcup_{s \in S} A(s) = \{0, \ldots, m-1\}`,
+  where :math:`\mathit{SA} = \{(s, a) \in S \times A \mid a \in A(s)\}`
+  is the set of feasible state-action pairs;
+* reward function :math:`r\colon \mathit{SA} \to \mathbb{R}`, where
+  :math:`r(s, a)` is the reward when the current state is :math:`s` and
+  the action chosen is :math:`a`;
+* transition probability function :math:`q\colon \mathit{SA} \to
+  \Delta(S)`, where :math:`q(s'|s, a)` is the probability that the state
+  in the next period is :math:`s'` when the current state is :math:`s`
+  and the action chosen is :math:`a`; and
+* discount factor :math:`\beta \in (0, 1)`.
+
+For a policy function :math:`\sigma`, let :math:`r_{\sigma}` and
+:math:`Q_{\sigma}` be the reward vector and the transition probability
+matrix for :math:`\sigma`, which are defined by :math:`r_{\sigma}(s) =
+r(s, \sigma(s))` and :math:`Q_{\sigma}(s, s') = q(s'|s, \sigma(s))`,
+respectively. The policy value function :math:`v_{\sigma}` for
+:math`\sigma` is defined by
+
+..math::
+
+    v_{\sigma}(s) = \sum_{t=0}^{\infty}
+                    \beta^t (Q_{\sigma}^t r_{\sigma})(s)
+                    \quad (s \in S).
+
+The *optimal value function* :math:`v^*` is the function such that
+:math:`v^*(s) = \max_{\sigma} v_{\sigma}(s)` for all :math:`s \in S`. A
+policy function :math:`\sigma^*` is *optimal* if :math:`v_{\sigma}(s) =
+v(s)` for all :math:`s \in S`.
+
+The *Bellman equation* is written as
+
+..math::
+
+    v(s) = \max_{a \in A(s)} r(s, a)
+           + \beta \sum_{s' \in S} q(s'|s, a) v(s') \quad (s \in S).
+
+The *Bellman operator* :math:`T` is defined by the right hand side of
+the Bellman equation:
+
+..math::
+
+    (T v)(s) = \max_{a \in A(s)} r(s, a)
+               + \beta \sum_{s' \in S} q(s'|s, a) v(s') \quad (s \in S).
+
+For a policy function :math:`\sigma`, the operator :math:`T_{\sigma}` is
+defined by
+
+..math::
+    (T_{\sigma} v)(s) = r(s, \sigma(s))
+                        + \beta \sum_{s' \in S} q(s'|s, \sigma(s)) v(s')
+                        \quad (s \in S),
+
+or :math:`T_{\sigma} v = r_{\sigma} + \beta Q_{\sigma} v`.
+
+The main result of the theory of dynamic programming states that the
+optimal value function :math:`v^*` is the unique solution to the Bellman
+equation, or the unique fixed point of the Bellman operator, and that
+:math:`\sigma^*` is an optimal policy function if and only if it is
+:math:`v^*`-greedy, i.e., it satisfies :math:`T v^* = T_{\sigma^*} v^*`.
+
 Solution Algorithms
 -------------------
 
-Error Bounds and Termination Conditions
----------------------------------------
+The `MDP` class currently implements the following solution algorithms:
+
+* value iteration;
+* policy iteration;
+* modified policy iteration.
+
+Policy iteration computes an exact optimal policy in finitely many
+iterations, while value iteration and modified policy iteration return
+an :math:`\varepsilon`-optimal policy and an
+:math:`\varepsilon/2`-approximation of the optimal value function for a
+prespecified value of :math:`\varepsilon`.
+
+Our implementations of value iteration and modified policy iteration
+employ the norm-based and span-based termination rules, respectively.
+
+* Value iteration is terminated when the condition :math:`\lVert T v - v
+  \rVert < [\beta / (1 - \beta)] \varepsilon` is satisfied.
+
+* Modified policy iteration is terminated when the condition
+  :math:`\mathrm{span}(T v - v) < [\beta / (1 - \beta)] \varepsilon` is
+  satisfied, where :math:`\mathrm{span}(z) = \max(z) - \min(z)`.
 
 References
 ----------
+
 M. L. Puterman, Markov Decision Processes: Discrete Stochastic Dynamic
 Programming, Wiley-Interscience, 2005.
 
@@ -66,14 +151,15 @@ class MDP(object):
        `a_indices[i]` when the state is `s_indices[i]` and `Q[i, s']` is
        the probability that the state in the next period is `s'` when
        the current state is `s_indices[i]` and the action chosen is
-       `a_indices[0]`
+       `a_indices[i]`. With this formulation, `Q` may be represented by
+       a scipy.sparse matrix.
 
     Parameters
     ----------
     R : array_like(float, ndim=2 or 1)
         Reward array.
 
-    Q : array_like(float, ndim=3 or 2)
+    Q : array_like(float, ndim=3 or 2) or scipy.sparse matrix
         Transition probability array.
 
     beta : scalar(float)
@@ -97,6 +183,12 @@ class MDP(object):
 
     num_sa_pairs : scalar(int)
         Number of state-action pairs.
+
+    epsilon : scalar(float), default=1e-3
+        Default value for epsilon-optimality.
+
+    max_iter : scalar(int), default=100
+        Default value for the maximum number of iterations.
 
     Examples
     --------
@@ -173,13 +265,13 @@ class MDP(object):
     *Modified policy iteration*
 
     >>> res = mdp.solve(method='modified_policy_iteration', w_0=[0, 0],
-    ...                 epsilon=0.01, k=5)
+    ...                 epsilon=0.01)
     >>> res.sigma  # (Approximate) optimal policy function
     array([0, 0])
     >>> res.v  # (Approximate) optimal value function
-    array([ -8.5702978, -19.9987502])
+    array([ -8.57142791, -19.99999927])
     >>> res.num_iter  # Number of iterations
-    4
+    3
 
     """
     def __init__(self, R, Q, beta, s_indices=None, a_indices=None):
@@ -314,7 +406,26 @@ class MDP(object):
             self._I = np.identity(self.num_states)
 
     def RQ_sigma(self, sigma):
+        """
+        Given a policy `sigma`, return the reward vector R_sigma and the
+        transition probability matrix Q_sigma.
+
+        Parameters
+        ----------
+        sigma : array_like(int, ndim=1)
+            Policy vector, of length n.
+
+        Returns
+        -------
+        R_sigma : ndarray(float, ndim=1)
+            Reward vector for `sigma`, of length n.
+
+        Q_sigma : ndarray(float, ndim=2)
+            Transition probability matrix for `sigma`, of shape (n, n).
+
+        """
         if self._sa_pair:
+            sigma = np.asarray(sigma)
             sigma_indices = np.empty(self.num_states, dtype=int)
             _find_indices(self.a_indices, self.a_indptr, sigma,
                           out=sigma_indices)
@@ -340,10 +451,10 @@ class MDP(object):
 
         Returns
         -------
-        Tw : array_like(float, ndim=1)
+        Tw : ndarray(float, ndim=1)
             Updated value function vector, of length n.
 
-        sigma : array_like(int, ndim=1)
+        sigma : ndarray(int, ndim=1)
             w-greedy policy vector, of length n. Only returned if
             `compute_policy=True`.
 
@@ -359,7 +470,7 @@ class MDP(object):
 
     def T_sigma(self, sigma):
         """
-        Return the T_sigma operator.
+        Given a policy `sigma`, return the T_sigma operator.
 
         Parameters
         ----------
@@ -386,7 +497,7 @@ class MDP(object):
 
         Returns
         -------
-        sigma : array_like(int, ndim=1)
+        sigma : ndarray(int, ndim=1)
             w-greedy policy vector, of length n.
 
         """
@@ -404,7 +515,7 @@ class MDP(object):
 
         Returns
         -------
-        v_sigma : array_like(float, ndim=1)
+        v_sigma : ndarray(float, ndim=1)
             Value vector of `sigma`, of length n.
 
         """
@@ -423,6 +534,35 @@ class MDP(object):
         """
         Solve the dynamic programming problem.
 
+        Parameters
+        ----------
+        method : str in {'value_iteration', 'vi', 'policy_iteration',
+                         'pi', 'modified_policy_iteration', 'mpi'},
+                 optinal(default='policy_iteration')
+            Solution method.
+
+        w_0 : array_like(float, ndim=1), optional(default=None)
+            Initial value function, of length n. If None, set w_0(s) =
+            max_a r(s, a).
+
+        epsilon : scalar(float), optional(default=None)
+            Value for epsilon-optimality. If None, the value stored in
+            the attribute `epsilon` is used.
+
+        max_iter : scalar(int), optional(default=None)
+            Maximum number of iterations. If None, the value stored in
+            the attribute `max_iter` is used.
+
+        k : scalar(int), optional(default=20)
+            Number of iterations for partial policy evaluation in
+            modified policy iteration (irrelevant for other methods).
+
+        Returns
+        -------
+        res : MDPSolveResult
+            Optimization result represetned as an MDPSolveResult. See
+            `MDPSolveResult` for details.
+
         """
         if method in ['value_iteration', 'vi']:
             res = self.value_iteration(w_0=w_0, epsilon=epsilon,
@@ -438,23 +578,52 @@ class MDP(object):
         return res
 
     def successive_approx(self, T, w_0, tol, max_iter):
+        """
+        Successively apply the operator `T` to `w_0`.
+
+        Parameters
+        ----------
+        T : callable
+            Operator that acts on `w_0`.
+
+        w_0 : array_like
+            Object on which `T` acts.
+
+        tol : scalar(float)
+            Error tolerance.
+
+        max_iter : scalar(int)
+            Maximum number of iterations.
+
+        Returns
+        -------
+        w : ndarray
+            Array given by `T^k w_0`.
+
+        """
         # May be replaced with quantecon.compute_fixed_point
         if max_iter <= 0:
             return w_0, 0
 
+        w_0 = np.asarray(w_0)
         w = w_0
         for i in range(max_iter):
             new_w = T(w)
             if np.abs(new_w - w).max() < tol:
                 w = new_w
                 break
-            w = new_w
+            w[:] = new_w
 
         num_iter = i + 1
 
         return w, num_iter
 
     def value_iteration(self, w_0=None, epsilon=None, max_iter=None):
+        """
+        Solve the optimization problem by value iteration. See the
+        `solve` method.
+
+        """
         if w_0 is None:
             w_0 = self.s_wise_max(self.R)
         if max_iter is None:
@@ -479,6 +648,11 @@ class MDP(object):
         return res
 
     def policy_iteration(self, w_0=None, max_iter=None):
+        """
+        Solve the optimization problem by policy iteration. See the
+        `solve` method.
+
+        """
         # What for initial condition?
         if w_0 is None:
             w_0 = self.s_wise_max(self.R)
@@ -508,6 +682,11 @@ class MDP(object):
 
     def modified_policy_iteration(self, w_0=None, epsilon=None, max_iter=None,
                                   k=20):
+        """
+        Solve the optimization problem by modified policy iteration. See
+        the `solve` method.
+
+        """
         if w_0 is None:
             w_0 = self.s_wise_max(self.R)
         if max_iter is None:
@@ -550,6 +729,14 @@ class MDP(object):
     def controlled_mc(self, sigma):
         """
         Returns the controlled Markov chain for a given policy `sigma`.
+
+        Parameters
+        ----------
+        sigma : array_like(int, ndim=1)
+            Policy vector, of length n.
+
+        mc : MarkovChain
+            Controlled Markov Chain.
 
         """
         _, Q_sigma = self.RQ_sigma(sigma)
