@@ -269,7 +269,7 @@ class MDP(object):
     >>> res.sigma  # (Approximate) optimal policy function
     array([0, 0])
     >>> res.v  # (Approximate) optimal value function
-    array([ -8.57142791, -19.99999927])
+    array([ -8.57142826, -19.99999965])
     >>> res.num_iter  # Number of iterations
     3
 
