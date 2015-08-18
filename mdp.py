@@ -711,7 +711,7 @@ class MDP(object):
             # Partial policy evaluation with k iterations
             v, _ = \
                 self.successive_approx(T=self.T_sigma(sigma), w_0=u,
-                                       tol=self.tol, max_iter=k-1)
+                                       tol=self.tol, max_iter=k)
 
         num_iter = i + 1
 
