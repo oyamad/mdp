@@ -537,6 +537,52 @@ class MDP(object):
 
         return v_sigma
 
+    def operator_iteration(self, T, v, max_iter, tol=None, *args, **kwargs):
+        """
+        Iteratively apply the operator `T` to `v`. Modify `v` in-place.
+        Iteration is performed for at most a number `max_iter` of times.
+        If `tol` is specified, it is terminated once the distance of
+        `T(v)` from `v` (in the max norm) is less than `tol`.
+
+        Parameters
+        ----------
+        T : callable
+            Operator that acts on `v`.
+
+        v : ndarray
+            Object on which `T` acts. Modified in-place.
+
+        max_iter : scalar(int)
+            Maximum number of iterations.
+
+        tol : scalar(float), optional(default=None)
+            Error tolerance.
+
+        args, kwargs :
+            Other arguments and keyword arguments that are passed
+            directly to the function T each time it is called.
+
+        Returns
+        -------
+        num_iter : scalar(int)
+            Number of iterations performed.
+
+        """
+        # May be replaced with quantecon.compute_fixed_point
+        if max_iter <= 0:
+            return v, 0
+
+        for i in range(max_iter):
+            new_v = T(v, *args, **kwargs)
+            if tol is not None and np.abs(new_v - v).max() < tol:
+                v[:] = new_v
+                break
+            v[:] = new_v
+
+        num_iter = i + 1
+
+        return num_iter
+
     def solve(self, method='policy_iteration',
               v_init=None, epsilon=None, max_iter=None, k=20):
         """
@@ -589,49 +635,6 @@ class MDP(object):
 
         return res
 
-    def successive_approx(self, T, v, tol, max_iter, *args, **kwargs):
-        """
-        Successively apply the operator `T` to `v`.
-
-        Parameters
-        ----------
-        T : callable
-            Operator that acts on `v`.
-
-        v : ndarray
-            Object on which `T` acts.
-
-        tol : scalar(float)
-            Error tolerance.
-
-        max_iter : scalar(int)
-            Maximum number of iterations.
-
-        args, kwargs :
-            Other arguments and keyword arguments that are passed
-            directly to the function T each time it is called.
-
-        Returns
-        -------
-        v : ndarray
-            Array given by `T^k v`.
-
-        """
-        # May be replaced with quantecon.compute_fixed_point
-        if max_iter <= 0:
-            return v, 0
-
-        for i in range(max_iter):
-            new_v = T(v, *args, **kwargs)
-            if tol > 0 and np.abs(new_v - v).max() < tol:
-                v[:] = new_v
-                break
-            v[:] = new_v
-
-        num_iter = i + 1
-
-        return v, num_iter
-
     def value_iteration(self, v_init=None, epsilon=None, max_iter=None):
         """
         Solve the optimization problem by value iteration. See the
@@ -654,10 +657,9 @@ class MDP(object):
         # Storage array for self.bellman_operator
         Tv = np.empty(self.num_states)
 
-        v, num_iter = \
-            self.successive_approx(T=self.bellman_operator,
-                                   v=v, tol=tol, max_iter=max_iter,
-                                   Tv=Tv)
+        num_iter = self.operator_iteration(T=self.bellman_operator,
+                                           v=v, max_iter=max_iter, tol=tol,
+                                           Tv=Tv)
         sigma = self.compute_greedy(v)
 
         res = MDPSolveResult(v=v,
@@ -741,10 +743,8 @@ class MDP(object):
                 v[:] = u + midrange(diff) * self.beta / (1 - self.beta)
                 break
             # Partial policy evaluation with k iterations
-            out, _ = \
-                self.successive_approx(T=self.T_sigma(sigma), v=u,
-                                       tol=0, max_iter=k)
-            v[:] = out
+            self.operator_iteration(T=self.T_sigma(sigma), v=u, max_iter=k)
+            v[:] = u
 
         num_iter = i + 1
 
