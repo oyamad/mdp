@@ -188,7 +188,7 @@ class MDP(object):
     epsilon : scalar(float), default=1e-3
         Default value for epsilon-optimality.
 
-    max_iter : scalar(int), default=100
+    max_iter : scalar(int), default=250
         Default value for the maximum number of iterations.
 
     Examples
@@ -255,7 +255,7 @@ class MDP(object):
     *Value iteration*
 
     >>> res = mdp.solve(method='value_iteration', v_init=[0, 0],
-    ...                 epsilon=0.01, max_iter=200)
+    ...                 epsilon=0.01)
     >>> res.sigma  # (Approximate) optimal policy function
     array([0, 0])
     >>> res.v  # (Approximate) optimal value function
@@ -400,7 +400,7 @@ class MDP(object):
         self.beta = beta
 
         self.epsilon = 1e-3
-        self.max_iter = 100
+        self.max_iter = 250
 
         # Linear equation solver to be used in evaluate_policy
         if self._sparse:
