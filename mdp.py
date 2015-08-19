@@ -62,6 +62,7 @@ For a policy function :math:`\sigma`, the operator :math:`T_{\sigma}` is
 defined by
 
 ..math::
+
     (T_{\sigma} v)(s) = r(s, \sigma(s))
                         + \beta \sum_{s' \in S} q(s'|s, \sigma(s)) v(s')
                         \quad (s \in S),
@@ -93,10 +94,10 @@ Our implementations of value iteration and modified policy iteration
 employ the norm-based and span-based termination rules, respectively.
 
 * Value iteration is terminated when the condition :math:`\lVert T v - v
-  \rVert < [\beta / (1 - \beta)] \varepsilon` is satisfied.
+  \rVert < [(1 - \beta) / (2\beta)] \varepsilon` is satisfied.
 
 * Modified policy iteration is terminated when the condition
-  :math:`\mathrm{span}(T v - v) < [\beta / (1 - \beta)] \varepsilon` is
+  :math:`\mathrm{span}(T v - v) < [(1 - \beta) / \beta] \varepsilon` is
   satisfied, where :math:`\mathrm{span}(z) = \max(z) - \min(z)`.
 
 References
@@ -264,8 +265,8 @@ class MDP(object):
 
     *Modified policy iteration*
 
-    >>> res = mdp.solve(method='modified_policy_iteration', v_init=[0, 0],
-    ...                 epsilon=0.01)
+    >>> res = mdp.solve(method='modified_policy_iteration',
+                        v_init=[0, 0], epsilon=0.01)
     >>> res.sigma  # (Approximate) optimal policy function
     array([0, 0])
     >>> res.v  # (Approximate) optimal value function
