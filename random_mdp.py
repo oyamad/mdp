@@ -7,14 +7,47 @@ Generate an MDP randomly.
 
 """
 import numpy as np
-import scipy.sparse as sp
+import scipy.sparse
+from numba import jit
+from quantecon.random import probvec, sample_without_replacement
+from quantecon.util import check_random_state
 from mdp import MDP
-from random_stochmatrix import gen_random_stochmatrix, \
-                               _random_probvec, _random_indices
 
 
-def random_mdp(num_states, num_actions, beta=None, constraints=None,
-                  k=None, scale=1, sa_pair=False):
+def _random_stochastic_matrix(m, n, k=None, sparse=False, format='csr',
+                              random_state=None):
+    if k is None:
+        k = n
+    # m prob vectors of dimension k, shape (m, k)
+    probvecs = probvec(m, k, random_state=random_state)
+
+    if k == n:
+        P = probvecs
+        if sparse:
+            return scipy.sparse.coo_matrix(P).asformat(format)
+        else:
+            return P
+
+    # if k < n:
+    rows = np.repeat(np.arange(m), k)
+    cols = \
+        sample_without_replacement(
+            n, k, num_trials=m, random_state=random_state
+        ).ravel()
+    data = probvecs.ravel()
+
+    if sparse:
+        P = scipy.sparse.coo_matrix((data, (rows, cols)), shape=(m, n))
+        return P.asformat(format)
+    else:
+        P = np.zeros((m, n))
+        P[rows, cols] = data
+        return P
+
+
+def random_mdp(num_states, num_actions, beta=None,
+               k=None, scale=1, sparse=False, sa_pair=False,
+               random_state=None):
     """
     Generate an MDP randomly. The reward values are drawn from the
     normal distribution with mean 0 and standard deviation `scale`.
@@ -27,15 +60,10 @@ def random_mdp(num_states, num_actions, beta=None, constraints=None,
     num_actions : scalar(int)
         Number of actions.
 
-    beta : scalar(float), optional
+    beta : scalar(float), optional(default=None)
         Discount factor. Randomly chosen from (0, 1) if not specified.
 
-    constraints : array_like(bool, ndim=2), optional
-        Array of shape (num_states, num_actions) representing the
-        constraints. If constraints[s, a] = False, then the flow reward
-        of action a for state s will be set to `-inf`.
-
-    k : scalar(int), optional
+    k : scalar(int), optional(default=None)
         Number of possible next states for each state-action pair. Equal
         to `num_states` if not specified.
 
@@ -43,50 +71,63 @@ def random_mdp(num_states, num_actions, beta=None, constraints=None,
         Standard deviation of the normal distribution for the reward
         values.
 
+    sparse : bool, optional(default=False)
+        Whether to store the transition probability array in sparse
+        matrix form.
+
+    sa_pair : bool, optional(default=False)
+        Whether to represent the data in the state-action pairs
+        formulation. (If `sparse=True`, automatically set `True`.)
+
+    random_state : scalar(int) or np.random.RandomState,
+                   optional(default=None)
+        Random seed (integer) or np.random.RandomState instance to set
+        the initial state of the random number generator for
+        reproducibility. If None, a randomly initialized RandomState is
+        used.
+
     Returns
     -------
     mdp : MDP
         An instance of MDP.
 
     """
-    if sa_pair:
-        if k is None:
-            k = num_states
+    if sparse:
+        sa_pair = True
 
-        if constraints is not None:
-            s_indices, a_indices = np.where(np.asarray(constraints) == False)
-            L = len(s_indices) * len(a_indices)
-        else:
-            from quantecon.cartesian import cartesian
-            s_indices, a_indices = \
-                cartesian(
-                    (range(num_states), range(num_actions))
-                ).astype(int).transpose()
-            L = num_states * num_actions
+    # Number of state-action pairs
+    L = num_states * num_actions
 
-        R = scale * np.random.randn(L)
-
-        rows = np.empty(L*k, dtype=int)
-        for i in range(L):
-            rows[k*i:k*(i+1)] = i
-        cols = _random_indices(num_states, k, L).flatten()
-        data = _random_probvec(k, L).flatten()
-        Q = sp.coo_matrix((data, (rows, cols)), shape=(L, num_states))
-
-    else:  # Not sa_pair
-        R = scale * np.random.randn(num_states, num_actions)
-        if constraints is not None:
-            R[np.where(np.asarray(constraints) is False)] = -np.inf
-
-        Q = np.empty((num_states, num_actions, num_states))
-        Ps = gen_random_stochmatrix(num_states, k=k, num_matrices=num_actions)
-        for a, P in enumerate(Ps):
-            Q[:, a, :] = P
-
-        s_indices, a_indices = None, None
-
+    random_state = check_random_state(random_state)
+    R = scale * random_state.randn(L)
+    Q = _random_stochastic_matrix(L, num_states, k=k,
+                                  sparse=sparse, format='csr',
+                                  random_state=random_state)
     if beta is None:
-        beta = np.random.rand(1)[0]
+        beta = random_state.random_sample()
+
+    if sa_pair:
+        s_indices, a_indices = _sa_indices(num_states, num_actions)
+    else:
+        s_indices, a_indices = None, None
+        R.shape = (num_states, num_actions)
+        Q.shape = (num_states, num_actions, num_states)
 
     mdp = MDP(R, Q, beta, s_indices, a_indices)
     return mdp
+
+
+@jit
+def _sa_indices(num_states, num_actions):
+    L = num_states * num_actions
+    s_indices = np.empty(L, dtype=int)
+    a_indices = np.empty(L, dtype=int)
+
+    i = 0
+    for s in range(num_states):
+        for a in range(num_actions):
+            s_indices[i] = s
+            a_indices[i] = a
+            i += 1
+
+    return s_indices, a_indices
