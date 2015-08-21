@@ -183,7 +183,8 @@ class MDP(object):
         Number of actions.
 
     num_sa_pairs : scalar(int)
-        Number of state-action pairs.
+        Number of feasible state-action pairs (or those that yield
+        finite rewards).
 
     epsilon : scalar(float), default=1e-3
         Default value for epsilon-optimality.
@@ -371,7 +372,7 @@ class MDP(object):
                 raise ValueError(msg_shape)
 
             self.s_indices, self.a_indices = None, None
-            self.num_sa_pairs = self.num_states * self.num_actions
+            self.num_sa_pairs = (self.R > -np.inf).sum()
 
             # Define state-wise maximization
             def s_wise_max(vals, out=None, out_argmax=None):
