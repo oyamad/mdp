@@ -58,6 +58,10 @@ class TestRandomMDP:
         assert_array_equal(self.mdps_sa['dense'].Q,
                            self.mdps_sa['sparse'].Q.toarray())
 
+    def test_equal_beta(self):
+        for mdp in self.mdps_sa.itervalues():
+            eq_(mdp.beta, self.mdp.beta)
+
 
 if __name__ == '__main__':
     import sys
