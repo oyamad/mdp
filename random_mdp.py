@@ -61,7 +61,7 @@ def random_mdp(num_states, num_actions, beta=None,
         Number of actions.
 
     beta : scalar(float), optional(default=None)
-        Discount factor. Randomly chosen from (0, 1) if not specified.
+        Discount factor. Randomly chosen from [0, 1) if not specified.
 
     k : scalar(int), optional(default=None)
         Number of possible next states for each state-action pair. Equal

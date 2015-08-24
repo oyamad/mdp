@@ -23,7 +23,7 @@ A finite Markov decision process consists of the following components:
   \Delta(S)`, where :math:`q(s'|s, a)` is the probability that the state
   in the next period is :math:`s'` when the current state is :math:`s`
   and the action chosen is :math:`a`; and
-* discount factor :math:`\beta \in (0, 1)`.
+* discount factor :math:`\beta \in [0, 1)`.
 
 For a policy function :math:`\sigma`, let :math:`r_{\sigma}` and
 :math:`Q_{\sigma}` be the reward vector and the transition probability
@@ -164,7 +164,7 @@ class MDP(object):
         Transition probability array.
 
     beta : scalar(float)
-        Discount factor. Must be in (0, 1).
+        Discount factor. Must be in [0, 1).
 
     s_indices : array_like(int, ndim=1), optional(default=None)
         Array containing the indices of the states.
@@ -396,8 +396,8 @@ class MDP(object):
 
             self.s_wise_max = s_wise_max
 
-        if not (0 < beta < 1):
-            raise ValueError('beta must be in (0, 1)')
+        if not (0 <= beta < 1):
+            raise ValueError('beta must be in [0, 1)')
         self.beta = beta
 
         self.epsilon = 1e-3
@@ -647,7 +647,10 @@ class MDP(object):
         if epsilon is None:
             epsilon = self.epsilon
 
-        tol = epsilon * (1-self.beta) / (2*self.beta)
+        try:
+            tol = epsilon * (1-self.beta) / (2*self.beta)
+        except ZeroDivisionError:  # Raised if beta = 0
+            tol = np.inf
 
         v = np.empty(self.num_states)
         if v_init is None:
@@ -740,7 +743,11 @@ class MDP(object):
             # Policy improvement
             self.bellman_operator(v, Tv=u, sigma=sigma)
             diff = u - v
-            if span(diff) < epsilon * (1-self.beta) / self.beta:
+            try:
+                tol = epsilon * (1-self.beta) / self.beta
+            except ZeroDivisionError:  # Raised if beta = 0
+                tol = np.inf
+            if span(diff) < tol:
                 v[:] = u + midrange(diff) * self.beta / (1 - self.beta)
                 break
             # Partial policy evaluation with k iterations

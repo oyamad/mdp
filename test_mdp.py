@@ -114,6 +114,30 @@ class TestMDP:
             assert_array_equal(res.sigma, self.sigma_star)
 
 
+def test_mdp_beta_0():
+    n, m = 3, 2
+    R = np.array([[0, 1], [1, 0], [0, 1]])
+    Q = np.empty((n, m, n))
+    Q[:] = 1/n
+    beta = 0
+    sigma_star = [1, 0, 1]
+    v_star = [1, 1, 1]
+    v_init = [0, 0, 0]
+
+    mdp0 = MDP(R, Q, beta)
+    s_indices, a_indices = np.where(R > -np.inf)
+    R_sa = R[s_indices, a_indices]
+    Q_sa = Q[s_indices, a_indices]
+    mdp1 = MDP(R_sa, Q_sa, beta, s_indices, a_indices)
+    methods = ['vi', 'pi', 'mpi']
+
+    for mdp in [mdp0, mdp1]:
+        for method in methods:
+            res = mdp.solve(method=method, v_init=v_init)
+            assert_array_equal(res.sigma, sigma_star)
+            assert_array_equal(res.v, v_star)
+
+
 if __name__ == '__main__':
     import sys
     import nose
