@@ -4,6 +4,7 @@ mdp
 Python code for Markov decision processes
 
 * [Getting started](http://nbviewer.ipython.org/github/oyamad/mdp/blob/master/mdp_intro.ipynb)
+* [Implementation details](http://nbviewer.ipython.org/github/oyamad/mdp/blob/master/mdp_theory.ipynb)
 
 Product formulation
 
