@@ -1,8 +1,10 @@
 mdp
 ===
 
-This module has been merged in [QuantEcon.py](https://github.com/QuantEcon/QuantEcon.py)
-(version 0.2.0 or above) as `DiscreteDP`.
+This module has been merged in
+[QuantEcon.py](https://github.com/QuantEcon/QuantEcon.py)
+(version 0.2.0 or above) as
+[`DiscreteDP`](https://github.com/QuantEcon/QuantEcon.py/blob/master/quantecon/markov/ddp.py).
 
 To try, type
 
