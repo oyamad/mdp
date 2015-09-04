@@ -19,7 +19,7 @@ at a terminal prompt.
 from quantecon.markov import DiscreteDP
 ```
 
-### Creating a `DiscreteDP` instance
+**Creating a `DiscreteDP` instance**
 
 *Product formulation*
 
@@ -41,7 +41,7 @@ from quantecon.markov import DiscreteDP
 >>> ddp = DiscreteDP(R, Q, beta, s_indices, a_indices)
 ```
 
-### Solving the model
+**Solving the model**
 
 *Policy iteration*
 
@@ -79,6 +79,7 @@ array([0, 0])
 array([ -8.57142826, -19.99999965])
 >>> res.num_iter  # Number of iterations
 3
+```
 
 
 ## Notebooks
