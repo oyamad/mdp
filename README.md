@@ -84,13 +84,18 @@ array([ -8.57142826, -19.99999965])
 ```
 
 
+## Lecture in [Quantitative Economics](http://quant-econ.net)
+
+* [Discrete Dynamic Programming](http://quant-econ.net/py/discrete_dp.html)
+
+
 ## Notebooks
 
 * [Getting started](http://nbviewer.ipython.org/github/QuantEcon/QuantEcon.site/blob/mdp/_static/notebooks/inwork/ddp/ddp_intro.ipynb)
 * [Implementation details](http://nbviewer.ipython.org/github/QuantEcon/QuantEcon.site/blob/mdp/_static/notebooks/inwork/ddp/ddp_theory.ipynb)
 * Examples
   * [Automobile replacement (Rust 1996)](http://nbviewer.ipython.org/github/QuantEcon/QuantEcon.site/blob/mdp/_static/notebooks/inwork/ddp/ddp_ex_rust96.ipynb)
-  * [Optimal growth](http://nbviewer.ipython.org/github/QuantEcon/QuantEcon.site/blob/mdp/_static/notebooks/inwork/ddp/ddp_ex_optgrowth.ipynb)
+  * [Optimal growth](http://nbviewer.ipython.org/github/oyamad/mdp/blob/master/ddp_ex_optgrowth.ipynb)
   * [Job search](http://nbviewer.ipython.org/github/oyamad/mdp/blob/master/ddp_ex_job_search.ipynb)
   * [Career choice](http://nbviewer.ipython.org/github/oyamad/mdp/blob/master/ddp_ex_career.ipynb)
   * [Asset replacement (Miranda and Fackler Section 7.6.2)](http://nbviewer.ipython.org/github/oyamad/mdp/blob/master/ddp_ex_MF_7_6_2.ipynb)
