@@ -84,7 +84,7 @@ array([ -8.57142826, -19.99999965])
 ```
 
 
-## Lecture in [Quantitative Economics](http://quant-econ.net)
+## Lecture in [quant-econ.net](http://quant-econ.net)
 
 * [Discrete Dynamic Programming](http://quant-econ.net/py/discrete_dp.html)
 
