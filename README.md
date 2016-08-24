@@ -103,4 +103,6 @@ array([ -8.57142826, -19.99999965])
   * [Option pricing (Miranda and Fackler Section 7.6.4)](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_ex_MF_7_6_4_py.ipynb)
   * [Water management (Miranda and Fackler Section 7.6.5)](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_ex_MF_7_6_5_py.ipynb)
   * [POMDP Tiger example](http://nbviewer.jupyter.org/github/oyamad/mdp/blob/master/pomdp_tiger.ipynb)
-* [Perfomance comparison](http://nbviewer.jupyter.org/github/oyamad/mdp/blob/master/ddp_performance.ipynb)
+* Perfomance comparison
+  * [Machine 1](http://nbviewer.jupyter.org/github/oyamad/mdp/blob/master/ddp_performance.ipynb)
+  * [Machine 2](http://nbviewer.jupyter.org/github/oyamad/mdp/blob/master/ddp_performance-2.ipynb)
