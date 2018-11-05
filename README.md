@@ -4,7 +4,7 @@ mdp
 This module has been merged in
 [QuantEcon.py](https://github.com/QuantEcon/QuantEcon.py)
 (version 0.2.0 or above) as
-[`DiscreteDP`](https://github.com/QuantEcon/QuantEcon.py/blob/master/quantecon/markov/ddp.py).
+[`DiscreteDP`](https://quanteconpy.readthedocs.io/en/latest/markov/ddp.html).
 
 To try, type
 
@@ -84,24 +84,26 @@ array([ -8.57142826, -19.99999965])
 ```
 
 
-## Lecture in [quant-econ.net](http://quant-econ.net)
+## Lecture in [Quantitative Economics](https://lectures.quantecon.org)
 
-* [Discrete Dynamic Programming](http://quant-econ.net/py/discrete_dp.html)
+* [Discrete State Dynamic Programming](https://lectures.quantecon.org/py/discrete_dp.html)
 
 
 ## Notebooks
 
-* [Getting started](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_intro_py.ipynb)
-* [Implementation details](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_theory_py.ipynb)
+* [Getting started](http://notes.quantecon.org/submission/5bd7a72df966080015bafbd1)
+* [Implementation details](http://notes.quantecon.org/submission/5bd7a7c2f966080015bafbd2)
 * Examples
-  * [Automobile replacement (Rust 1996)](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_ex_rust96_py.ipynb)
+  * [Automobile replacement (Rust 1996)](http://notes.quantecon.org/submission/5b3585efb9eab00015b89f87)
   * [Optimal growth](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_ex_optgrowth_py.ipynb)
   * [Job search](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_ex_job_search_py.ipynb)
   * [Career choice](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_ex_career_py.ipynb)
+  * [Mine Managment (Miranda and Fackler Section 7.6.1)](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_ex_MF_7_6_1_py.ipynb)
   * [Asset replacement (Miranda and Fackler Section 7.6.2)](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_ex_MF_7_6_2_py.ipynb)
   * [Asset replacement with maintenance (Miranda and Fackler Section 7.6.3)](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_ex_MF_7_6_3_py.ipynb)
   * [Option pricing (Miranda and Fackler Section 7.6.4)](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_ex_MF_7_6_4_py.ipynb)
   * [Water management (Miranda and Fackler Section 7.6.5)](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_ex_MF_7_6_5_py.ipynb)
+  * [Bioeconomics (Miranda and Fackler Section 7.6.6)](http://nbviewer.jupyter.org/github/QuantEcon/QuantEcon.notebooks/blob/master/ddp_ex_MF_7_6_6_py.ipynb)
   * [POMDP Tiger example](http://nbviewer.jupyter.org/github/oyamad/mdp/blob/master/pomdp_tiger.ipynb)
 * Perfomance comparison
   * [Machine 1](http://nbviewer.jupyter.org/github/oyamad/mdp/blob/master/ddp_performance.ipynb)
